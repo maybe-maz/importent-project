@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doctor Page</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f8ff;
+      min-height: 100vh;
+      padding: 18px;
+      box-sizing: border-box;
+    }
+
+    .breadcrumb-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .crumb-link {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .crumb-current {
+      color: #0f172a;
+      font-weight: bold;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      gap: 10px;
+      background: white;
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    .top-left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 7px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .btn.secondary {
+      background: #16a34a;
+    }
+
+    .content {
+      text-align: right;
+      color: #1e293b;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      color: #2563eb;
+    }
+
+    p {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .popup {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.35);
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    .popup-box {
+      background: white;
+      padding: 24px;
+      border-radius: 16px;
+      width: 320px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+    }
+
+    .popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .popup-box h2 {
+      margin-top: 0;
+      margin-bottom: 0;
+      color: #2563eb;
+      font-size: 20px;
+    }
+
+    .popup-close {
+      border: none;
+      background: transparent;
+      color: #64748b;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    .popup-close:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+
+    .popup-box input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    .popup-box button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .subject-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: min(100%, 520px);
+      align-items: start;
+    }
+
+    .subject-item {
+      background: white;
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.08);
+      min-height: 82px;
+      width: calc(50% - 6px);
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      border: 1px solid #e2e8f0;
+      box-sizing: border-box;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .subject-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 18px rgba(0,0,0,0.12);
+    }
+
+    .subject-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(4px);
+      transition: all 0.2s ease;
+    }
+
+    .subject-item:hover .subject-actions,
+    .subject-item:focus-within .subject-actions {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .subject-actions button {
+      border: 1px solid rgba(37, 99, 235, 0.25);
+      border-radius: 8px;
+      padding: 5px 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: rgba(37, 99, 235, 0.9);
+      background: transparent;
+      line-height: 1;
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+
+    .delete-btn {
+      color: rgba(220, 38, 38, 0.9);
+      border-color: rgba(220, 38, 38, 0.25);
+    }
+  </style>
+</head>
+<body>
+  <div class="breadcrumb-bar" id="breadcrumb"></div>
+
+  <div class="topbar">
+    <div class="top-left">
+      <button class="btn" onclick="openPopup()">Add Subject</button>
+    </div>
+
+    <div class="content">
+      <h1>Doctor Page</h1>
+    </div>
+  </div>
+
+  <div class="subject-list" id="subjectList"></div>
+
+  <div class="popup" id="popup">
+    <div class="popup-box">
+      <div class="popup-header">
+        <h2 id="popupTitle">Add Subject</h2>
+        <button class="popup-close" onclick="closePopup()" aria-label="Close popup">×</button>
+      </div>
+      <input id="doctorName" type="text" placeholder="Doctor Name" />
+      <input id="subjectName" type="text" placeholder="Subject Name" />
+      <button onclick="saveSubject()">Save</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'doctorSubjects';
+    const HISTORY_KEY = 'pageHistory';
+    let editMode = false;
+    let currentIndex = -1;
+    let subjects = [];
+
+    function loadSubjects() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveSubjectsToStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(subjects));
+    }
+
+    function getPageHistory() {
+      try {
+        return JSON.parse(sessionStorage.getItem(HISTORY_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function setPageHistory(history) {
+      sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    }
+
+    function renderBreadcrumb() {
+      const container = document.getElementById('breadcrumb');
+      if (!container) return;
+
+      const history = getPageHistory();
+      const items = history.length ? history : ['Home', 'Doctor'];
+      const updatedHistory = items[0] === 'Home' && items[1] === 'Doctor' ? ['Home', 'Doctor'] : items;
+      setPageHistory(updatedHistory);
+
+      container.innerHTML = updatedHistory.map((item, index) => {
+        const isLast = index === updatedHistory.length - 1;
+        if (isLast) {
+          return `<span class="crumb-current">${item}</span>`;
+        }
+
+        const href = item === 'Home' ? 'indext.html' : 'doctor.html';
+        return `<a class="crumb-link" href="${href}">${item}</a>`;
+      }).join('<span>/</span>');
+    }
+
+    subjects = loadSubjects();
+    renderBreadcrumb();
+    renderSubjects();
+
+    function openPopup(isEdit = false, index = -1) {
+      editMode = isEdit;
+      currentIndex = index;
+      document.getElementById('popup').style.display = 'flex';
+      document.getElementById('popupTitle').textContent = isEdit ? 'Edit Subject' : 'Add Subject';
+
+      if (isEdit && index >= 0) {
+        document.getElementById('doctorName').value = subjects[index].doctor;
+        document.getElementById('subjectName').value = subjects[index].subject;
+      } else {
+        document.getElementById('doctorName').value = '';
+        document.getElementById('subjectName').value = '';
+      }
+    }
+
+    function closePopup() {
+      document.getElementById('popup').style.display = 'none';
+    }
+
+    function saveSubject() {
+      const doctor = document.getElementById('doctorName').value.trim();
+      const subject = document.getElementById('subjectName').value.trim();
+
+      if (!doctor || !subject) return;
+
+      if (editMode && currentIndex >= 0) {
+        subjects[currentIndex] = { doctor, subject };
+      } else {
+        subjects.push({ doctor, subject });
+      }
+
+      saveSubjectsToStorage();
+      renderSubjects();
+      closePopup();
+      document.getElementById('doctorName').value = '';
+      document.getElementById('subjectName').value = '';
+    }
+
+    function deleteSubject(index) {
+      subjects.splice(index, 1);
+      saveSubjectsToStorage();
+      renderSubjects();
+    }
+
+    function renderSubjects() {
+      const list = document.getElementById('subjectList');
+      list.innerHTML = '';
+
+      if (subjects.length === 0) {
+        list.innerHTML = '<p>No subjects yet.</p>';
+        return;
+      }
+
+      subjects.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'subject-item';
+        div.innerHTML = `
+          <div>
+            <strong>${item.subject}</strong><br>Doctor: ${item.doctor}
+          </div>
+          <div class="subject-actions">
+            <button class="edit-btn" onclick="event.stopPropagation(); openPopup(true, ${index})" title="Edit">✏️</button>
+            <button class="delete-btn" onclick="event.stopPropagation(); deleteSubject(${index})" title="Delete">🗑️</button>
+          </div>
+        `;
+        div.onclick = () => {
+          const subjectName = encodeURIComponent(item.subject);
+          const doctorName = encodeURIComponent(item.doctor);
+          window.location.href = `subject-details.html?subject=${subjectName}&doctor=${doctorName}`;
+        };
+        list.appendChild(div);
+      });
+    }
+  </script>
+</body>
+</html>

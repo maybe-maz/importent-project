@@ -1,0 +1,13 @@
+{
+  "name": "important-project-attendance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Attendance system with real backend API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

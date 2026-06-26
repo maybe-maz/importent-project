@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subject Details</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f8ff;
+      min-height: 100vh;
+      padding: 18px;
+      box-sizing: border-box;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: white;
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+      direction: rtl;
+    }
+
+    .back-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .popup {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.35);
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    .popup.show {
+      display: flex;
+    }
+
+    .popup-box {
+      background: white;
+      width: min(92%, 360px);
+      padding: 20px;
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.16);
+    }
+
+    .popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .popup-box h3 {
+      margin-top: 0;
+      margin-bottom: 0;
+      color: #2563eb;
+      font-size: 18px;
+    }
+
+    .popup-close {
+      border: none;
+      background: transparent;
+      color: #64748b;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    .popup-close:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+
+    .popup-box label {
+      display: block;
+      font-size: 13px;
+      color: #475569;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+
+    .popup-box input {
+      width: 100%;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    .popup-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .popup-actions button {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .popup-actions .save-btn {
+      background: #2563eb;
+      color: white;
+    }
+
+    .popup-actions .cancel-btn {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .breadcrumb-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .crumb-link {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .crumb-current {
+      color: #0f172a;
+      font-weight: bold;
+    }
+
+    .page-title {
+      color: #0f172a;
+      font-weight: bold;
+      font-size: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
+      gap: 2px;
+      line-height: 1.2;
+      margin-left: 8px;
+    }
+
+    .page-title-subject {
+      font-weight: bold;
+      color: #0f172a;
+    }
+
+    .page-title-doctor {
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 500;
+      display: inline-block;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .label {
+      color: #64748b;
+      font-size: 13px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      color: #2563eb;
+      font-size: 24px;
+    }
+
+    .doctor-name {
+      color: #0f172a;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .sessions-title {
+      margin-top: 16px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #2563eb;
+      text-align: left;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .lecture-list {
+      max-width: 480px;
+      margin: 12px auto 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .lecture-item {
+      background: #f7f8fb;
+      border-radius: 16px;
+      border: 1px solid #d7dde7;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .lecture-item:hover {
+      border-color: #c8d1df;
+    }
+
+    .lecture-content {
+      padding: 12px;
+    }
+
+    .lecture-item .lecture-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #111827;
+    }
+
+    .room-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 18px;
+    }
+
+    .room-pin {
+      font-size: 16px;
+      color: #344054;
+    }
+
+    .time-strip {
+      background: #eef1f6;
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      color: #111827;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .pass-row {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+      color: #344054;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .pass-chip {
+      background: #e5ebf4;
+      color: #1f2a44;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: 13px;
+      font-family: Consolas, monospace;
+    }
+
+    .lecture-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      border-top: 1px solid #d7dde7;
+      padding: 10px;
+      background: #f3f5f9;
+    }
+
+    .lecture-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 7px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      color: white;
+    }
+
+    .qr-btn {
+      background: #1e9bd7;
+    }
+
+    .attendance-btn {
+      background: #182448;
+    }
+
+    .delete-btn {
+      position: absolute;
+      top: 9px;
+      left: 10px;
+      background: transparent;
+      color: #f87171;
+      border: none;
+      border-radius: 999px;
+      width: 24px;
+      height: 24px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.95;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="breadcrumb-bar" id="breadcrumb"></div>
+
+  <div class="topbar">
+    <div class="page-title" id="pageTitle">Subject Details</div>
+    <button class="back-btn" onclick="openPopup()">Add Lecture</button>
+  </div>
+
+  <div class="sessions-title">Sessions</div>
+  <div class="lecture-list" id="lectureList"></div>
+
+  <div class="popup" id="lecturePopup">
+    <div class="popup-box">
+      <div class="popup-header">
+        <h3>Add Lecture</h3>
+        <button class="popup-close" onclick="closePopup()" aria-label="Close popup">×</button>
+      </div>
+      <label>Room Number</label>
+      <input id="roomNumber" type="text" placeholder="Enter room number" />
+      <label>Start Time</label>
+      <input id="startTime" type="time" />
+      <label>End Time</label>
+      <input id="endTime" type="time" />
+      <label>Password</label>
+      <input id="lecturePassword" type="password" placeholder="Enter password" />
+      <div class="popup-actions">
+        <button class="cancel-btn" onclick="closePopup()">Cancel</button>
+        <button class="save-btn" onclick="saveLecture()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const HISTORY_KEY = 'pageHistory';
+    const LOCAL_LECTURES_KEY_PREFIX = 'savedLectures';
+    const params = new URLSearchParams(window.location.search);
+    const subject = params.get('subject');
+    const doctor = params.get('doctor');
+    const subjectText = subject ? decodeURIComponent(subject) : 'No subject';
+    const doctorText = doctor ? decodeURIComponent(doctor) : 'No doctor';
+    let lecturesCache = [];
+
+    function getLocalLecturesKey() {
+      return `${LOCAL_LECTURES_KEY_PREFIX}::${subjectText}::${doctorText}`;
+    }
+
+    function loadLocalLectures() {
+      try {
+        return JSON.parse(localStorage.getItem(getLocalLecturesKey()) || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function saveLocalLectures(lectures) {
+      localStorage.setItem(getLocalLecturesKey(), JSON.stringify(lectures));
+    }
+
+    function getApiBase() {
+      return '';
+    }
+
+    async function fetchLectures() {
+      const search = new URLSearchParams({
+        subject: subjectText,
+        doctor: doctorText
+      });
+
+      try {
+        const response = await fetch(`${getApiBase()}/api/lectures?${search.toString()}`);
+        if (!response.ok) {
+          throw new Error('Failed to load lectures.');
+        }
+
+        const apiLectures = await response.json();
+        saveLocalLectures(apiLectures);
+        return apiLectures;
+      } catch {
+        return loadLocalLectures();
+      }
+    }
+
+    async function renderLectures() {
+      const list = document.getElementById('lectureList');
+      try {
+        lecturesCache = await fetchLectures();
+      } catch {
+        list.innerHTML = '<p style="color:#64748b;">Could not load lectures.</p>';
+        return;
+      }
+
+      if (!lecturesCache.length) {
+        list.innerHTML = '';
+        return;
+      }
+
+      list.innerHTML = lecturesCache.map((lecture, index) => `
+        <div class="lecture-item">
+          <button class="delete-btn" onclick="event.stopPropagation(); deleteLecture('${lecture.id}')" title="Delete lecture">🗑️</button>
+          <div class="lecture-content">
+            <div class="lecture-top">
+              <div></div>
+              <div class="room-wrap">
+                <span>${lecture.roomNumber}</span>
+                <span class="room-pin">📍</span>
+              </div>
+            </div>
+            <div class="time-strip">
+              <span>${lecture.startTime}</span>
+              <span>-</span>
+              <span>${lecture.endTime}</span>
+              <span>🕒</span>
+            </div>
+            <div class="pass-row">
+              <span class="pass-chip">${lecture.password}</span>
+              <span>Password</span>
+            </div>
+          </div>
+          <div class="lecture-actions">
+            <button class="lecture-btn qr-btn" onclick="openLecturePage(${index})">Show QR</button>
+            <button class="lecture-btn attendance-btn" onclick="openAttendance(${index})">Attendance</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openAttendance(index) {
+      const lecture = lecturesCache[index];
+      if (!lecture) return;
+      sessionStorage.setItem('selectedLecture', JSON.stringify({ ...lecture, sessionNumber: index + 1 }));
+      const subjectQuery = encodeURIComponent(subjectText);
+      const doctorQuery = encodeURIComponent(doctorText);
+      window.location.href = `lecture-attendance.html?subject=${subjectQuery}&doctor=${doctorQuery}`;
+    }
+
+    function openLecturePage(index) {
+      const lecture = lecturesCache[index];
+      if (!lecture) return;
+      sessionStorage.setItem('selectedLecture', JSON.stringify({ ...lecture, sessionNumber: index + 1 }));
+      const subjectQuery = encodeURIComponent(subjectText);
+      const doctorQuery = encodeURIComponent(doctorText);
+      window.location.href = `lecture-details.html?subject=${subjectQuery}&doctor=${doctorQuery}`;
+    }
+
+    async function deleteLecture(id) {
+      try {
+        const response = await fetch(`${getApiBase()}/api/lectures/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete lecture.');
+        }
+      } catch {
+        const localLectures = loadLocalLectures().filter((lecture) => lecture.id !== id);
+        saveLocalLectures(localLectures);
+      }
+
+      renderLectures();
+    }
+
+    function openPopup() {
+      document.getElementById('lecturePopup').classList.add('show');
+    }
+
+    function closePopup() {
+      document.getElementById('lecturePopup').classList.remove('show');
+    }
+
+    async function saveLecture() {
+      const roomNumber = document.getElementById('roomNumber').value;
+      const startTime = document.getElementById('startTime').value;
+      const endTime = document.getElementById('endTime').value;
+      const password = document.getElementById('lecturePassword').value;
+
+      if (!roomNumber || !startTime || !endTime || !password) {
+        alert('Please fill all fields');
+        return;
+      }
+
+      const payload = {
+        subject: subjectText,
+        doctor: doctorText,
+        roomNumber,
+        startTime,
+        endTime,
+        password
+      };
+
+      try {
+        const response = await fetch(`${getApiBase()}/api/lectures`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save lecture.');
+        }
+      } catch {
+        const localLectures = loadLocalLectures();
+        localLectures.push({
+          id: `local-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          ...payload
+        });
+        saveLocalLectures(localLectures);
+      }
+
+      renderLectures();
+      closePopup();
+      document.getElementById('roomNumber').value = '';
+      document.getElementById('startTime').value = '';
+      document.getElementById('endTime').value = '';
+      document.getElementById('lecturePassword').value = '';
+    }
+
+    function getPageHistory() {
+      try {
+        return JSON.parse(sessionStorage.getItem(HISTORY_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function setPageHistory(history) {
+      sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    }
+
+    function renderBreadcrumb() {
+      const container = document.getElementById('breadcrumb');
+      if (!container) return;
+
+      const history = getPageHistory();
+      const updatedHistory = ['Home', 'Doctor', 'Subject Details'];
+      setPageHistory(updatedHistory);
+
+      container.innerHTML = updatedHistory.map((item, index) => {
+        const isLast = index === updatedHistory.length - 1;
+        if (isLast) {
+          return `<span class="crumb-current">${item}</span>`;
+        }
+
+        const href = item === 'Home' ? 'indext.html' : 'doctor.html';
+        return `<a class="crumb-link" href="${href}">${item}</a>`;
+      }).join('<span>/</span>');
+    }
+
+    document.getElementById('pageTitle').innerHTML = `<div class="page-title-subject">${subjectText}</div><div class="page-title-doctor">Doctor : ${doctorText}</div>`;
+    document.title = `${subjectText} - ${doctorText}`;
+    renderBreadcrumb();
+    renderLectures();
+  </script>
+</body>
+</html>
