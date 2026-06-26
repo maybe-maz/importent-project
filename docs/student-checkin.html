@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Check-in</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(160deg, #eff6ff, #f8fbff);
+      min-height: 100vh;
+      padding: 18px;
+      box-sizing: border-box;
+      color: #0f172a;
+    }
+
+    .panel {
+      max-width: 480px;
+      margin: 10px auto;
+      background: #ffffff;
+      border: 1px solid #dbeafe;
+      border-radius: 16px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f8fbff;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      color: #1d4ed8;
+    }
+
+    .sub {
+      margin-top: 6px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .body {
+      padding: 16px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .label {
+      color: #64748b;
+    }
+
+    .value {
+      font-weight: bold;
+      color: #0f172a;
+      text-align: right;
+    }
+
+    .field {
+      margin-top: 14px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      color: #475569;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+
+    .field input {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    .btn {
+      width: 100%;
+      margin-top: 14px;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 12px;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+      background: #2563eb;
+      cursor: pointer;
+    }
+
+    .msg {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #0f766e;
+      background: #ecfeff;
+      border: 1px solid #99f6e4;
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: none;
+    }
+
+    .warn {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #9a3412;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="header">
+      <h1>Student Check-in</h1>
+      <div class="sub">Opened from lecture QR</div>
+    </div>
+    <div class="body">
+      <div class="row"><div class="label">Subject</div><div class="value" id="subject">-</div></div>
+      <div class="row"><div class="label">Doctor</div><div class="value" id="doctor">-</div></div>
+      <div class="row"><div class="label">Room</div><div class="value" id="room">-</div></div>
+      <div class="row"><div class="label">Time</div><div class="value" id="time">-</div></div>
+
+      <div class="field">
+        <label for="studentId">Student ID</label>
+        <input id="studentId" type="text" placeholder="Enter your student ID" />
+      </div>
+
+      <div class="field">
+        <label for="studentName">Student Name</label>
+        <input id="studentName" type="text" placeholder="Enter your name" />
+      </div>
+
+      <div class="field">
+        <label for="password">Lecture Password</label>
+        <input id="password" type="password" placeholder="Enter lecture password" />
+      </div>
+
+      <button class="btn" onclick="submitCheckin()">Submit Check-in</button>
+      <div class="msg" id="successMsg">Check-in submitted successfully.</div>
+      <div class="warn">Check-in is sent to backend API and saved for this lecture.</div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const lectureId = params.get('lectureId') || '';
+    const subject = params.get('subject') || '-';
+    const doctor = params.get('doctor') || '-';
+    const room = params.get('room') || '-';
+    const start = params.get('start') || '--:--';
+    const end = params.get('end') || '--:--';
+
+    document.getElementById('subject').textContent = decodeURIComponent(subject);
+    document.getElementById('doctor').textContent = decodeURIComponent(doctor);
+    document.getElementById('room').textContent = decodeURIComponent(room);
+    document.getElementById('time').textContent = `${decodeURIComponent(start)} - ${decodeURIComponent(end)}`;
+
+    async function hydrateLectureDetails() {
+      if (!lectureId) return;
+
+      try {
+        const response = await fetch(`/api/lectures/${encodeURIComponent(lectureId)}`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+        document.getElementById('subject').textContent = data.subject || '-';
+        document.getElementById('doctor').textContent = data.doctor || '-';
+        document.getElementById('room').textContent = data.roomNumber || '-';
+        document.getElementById('time').textContent = `${data.startTime || '--:--'} - ${data.endTime || '--:--'}`;
+      } catch {
+      }
+    }
+
+    async function submitCheckin() {
+      const id = document.getElementById('studentId').value.trim();
+      const name = document.getElementById('studentName').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      if (!id || !name || !password) {
+        alert('Please fill all fields.');
+        return;
+      }
+
+      if (!lectureId) {
+        alert('Lecture is not identified in QR link.');
+        return;
+      }
+
+      const response = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          lectureId,
+          studentId: id,
+          studentName: name,
+          password
+        })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ message: 'Check-in failed.' }));
+        alert(payload.message || 'Check-in failed.');
+        return;
+      }
+
+      const msg = document.getElementById('successMsg');
+      msg.style.display = 'block';
+    }
+
+    hydrateLectureDetails();
+  </script>
+</body>
+</html>
