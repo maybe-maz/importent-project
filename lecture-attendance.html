@@ -358,6 +358,7 @@
     let students = [];
 
     function getLectureId() {
+      if (lecture && lecture.id) return lecture.id;
       if (!lecture) return 'default-lecture';
       return [
         lecture.roomNumber || '-',
@@ -371,18 +372,36 @@
       return `attendance::${subjectName}::${doctorName}::${getLectureId()}`;
     }
 
-    function loadAttendance() {
+    async function loadAttendance() {
+      const lectureId = getLectureId();
+      if (lectureId && lectureId !== 'default-lecture') {
+        try {
+          const response = await fetch(`/api/attendance?lectureId=${encodeURIComponent(lectureId)}`);
+          if (response.ok) {
+            students = await response.json();
+            renderStats();
+            renderTable();
+            return;
+          }
+        } catch {
+        }
+      }
+
       try {
         const stored = localStorage.getItem(getAttendanceKey());
         if (stored) {
-          return JSON.parse(stored);
+          students = JSON.parse(stored);
+          renderStats();
+          renderTable();
+          return;
         }
       } catch {
       }
 
-      const seeded = DEFAULT_STUDENTS.map((student) => ({ ...student }));
-      localStorage.setItem(getAttendanceKey(), JSON.stringify(seeded));
-      return seeded;
+      students = DEFAULT_STUDENTS.map((student) => ({ ...student }));
+      saveAttendance();
+      renderStats();
+      renderTable();
     }
 
     function saveAttendance() {
@@ -461,8 +480,6 @@
     }
 
     async function markPresent(index) {
-      students[index].status = 'present';
-
       const target = students[index];
       const lectureId = getLectureId();
       if (!target || !lectureId) return;
@@ -485,7 +502,7 @@
         return;
       }
 
-      loadAttendance();
+      await loadAttendance();
     }
 
     function exportTable() {
