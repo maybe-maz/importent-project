@@ -162,17 +162,34 @@
     const room = params.get('room') || '-';
     const start = params.get('start') || '--:--';
     const end = params.get('end') || '--:--';
+    const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
 
     document.getElementById('subject').textContent = decodeURIComponent(subject);
     document.getElementById('doctor').textContent = decodeURIComponent(doctor);
     document.getElementById('room').textContent = decodeURIComponent(room);
     document.getElementById('time').textContent = `${decodeURIComponent(start)} - ${decodeURIComponent(end)}`;
 
+    function normalizeApiBase(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/\/+$/, '');
+    }
+
+    function getApiBase() {
+      const fromQuery = normalizeApiBase(params.get('apiBase') || '');
+      if (fromQuery) return fromQuery;
+
+      const fromStorage = normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
+      if (fromStorage) return fromStorage;
+
+      return '';
+    }
+
     async function hydrateLectureDetails() {
       if (!lectureId) return;
 
       try {
-        const response = await fetch(`/api/lectures/${encodeURIComponent(lectureId)}`);
+        const response = await fetch(`${getApiBase()}/api/lectures/${encodeURIComponent(lectureId)}`);
         if (!response.ok) return;
 
         const data = await response.json();
@@ -199,7 +216,12 @@
         return;
       }
 
-      const response = await fetch('/api/checkin', {
+      if (!getApiBase() && window.location.hostname.includes('github.io')) {
+        alert('Backend API is not configured. Ask doctor to regenerate QR after setting API URL.');
+        return;
+      }
+
+      const response = await fetch(`${getApiBase()}/api/checkin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

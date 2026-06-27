@@ -352,7 +352,10 @@
 
   <div class="topbar">
     <div class="page-title" id="pageTitle">Subject Details</div>
-    <button class="back-btn" onclick="openPopup()">Add Lecture</button>
+    <div style="display:flex; gap:8px;">
+      <button class="back-btn" onclick="configureApiBase()">API URL</button>
+      <button class="back-btn" onclick="openPopup()">Add Lecture</button>
+    </div>
   </div>
 
   <div class="sessions-title">Sessions</div>
@@ -381,6 +384,7 @@
 
   <script>
     const HISTORY_KEY = 'pageHistory';
+    const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const LOCAL_LECTURES_KEY_PREFIX = 'savedLectures';
     const params = new URLSearchParams(window.location.search);
     const subject = params.get('subject');
@@ -405,8 +409,31 @@
       localStorage.setItem(getLocalLecturesKey(), JSON.stringify(lectures));
     }
 
+    function normalizeApiBase(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/\/+$/, '');
+    }
+
     function getApiBase() {
-      return '';
+      const stored = localStorage.getItem(API_BASE_STORAGE_KEY) || '';
+      return normalizeApiBase(stored);
+    }
+
+    function configureApiBase() {
+      const current = getApiBase();
+      const value = prompt('Enter backend API base URL (example: https://your-api.onrender.com)', current);
+      if (value === null) return;
+
+      const normalized = normalizeApiBase(value);
+      if (!normalized) {
+        localStorage.removeItem(API_BASE_STORAGE_KEY);
+        alert('API URL removed. The app will use same-origin API.');
+        return;
+      }
+
+      localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
+      alert('API URL saved.');
     }
 
     async function fetchLectures() {

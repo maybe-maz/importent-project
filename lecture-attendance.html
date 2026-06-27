@@ -345,6 +345,7 @@
     const params = new URLSearchParams(window.location.search);
     const subject = params.get('subject');
     const doctor = params.get('doctor');
+    const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const lecture = JSON.parse(sessionStorage.getItem('selectedLecture') || 'null');
     const subjectName = subject || 'Subject';
     const doctorName = doctor || 'No doctor';
@@ -356,6 +357,16 @@
     ];
 
     let students = [];
+
+    function normalizeApiBase(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/\/+$/, '');
+    }
+
+    function getApiBase() {
+      return normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
+    }
 
     function getLectureId() {
       if (lecture && lecture.id) return lecture.id;
@@ -376,7 +387,7 @@
       const lectureId = getLectureId();
       if (lectureId && lectureId !== 'default-lecture') {
         try {
-          const response = await fetch(`/api/attendance?lectureId=${encodeURIComponent(lectureId)}`);
+          const response = await fetch(`${getApiBase()}/api/attendance?lectureId=${encodeURIComponent(lectureId)}`);
           if (response.ok) {
             students = await response.json();
             renderStats();
@@ -484,7 +495,7 @@
       const lectureId = getLectureId();
       if (!target || !lectureId) return;
 
-      const response = await fetch('/api/attendance/mark', {
+      const response = await fetch(`${getApiBase()}/api/attendance/mark`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
