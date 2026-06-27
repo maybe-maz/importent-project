@@ -228,7 +228,11 @@
 
     function getBaseUrl() {
       if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
-        return `${window.location.protocol}//${window.location.host}`;
+        const origin = `${window.location.protocol}//${window.location.host}`;
+        const currentPath = window.location.pathname || '/';
+        const lastSlashIndex = currentPath.lastIndexOf('/');
+        const appBasePath = lastSlashIndex >= 0 ? currentPath.slice(0, lastSlashIndex) : '';
+        return `${origin}${appBasePath}`;
       }
 
       // Fallback for file:// preview; user should host files for real mobile scanning.
