@@ -163,6 +163,7 @@
     const start = params.get('start') || '--:--';
     const end = params.get('end') || '--:--';
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
+    const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
 
     document.getElementById('subject').textContent = decodeURIComponent(subject);
     document.getElementById('doctor').textContent = decodeURIComponent(doctor);
@@ -185,10 +186,57 @@
       return '';
     }
 
+    function getSupabaseRestBase() {
+      const base = getApiBase();
+      if (!base) return '';
+      if (base.includes('/rest/v1')) return base;
+      if (base.includes('.supabase.co')) return `${base}/rest/v1`;
+      return '';
+    }
+
+    function getSupabaseAnonKey() {
+      const fromQuery = (params.get('sbKey') || '').trim();
+      if (fromQuery) {
+        localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+      return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+    }
+
+    function isSupabaseMode() {
+      return !!(getSupabaseRestBase() && getSupabaseAnonKey());
+    }
+
+    function getSupabaseHeaders() {
+      const key = getSupabaseAnonKey();
+      return {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`
+      };
+    }
+
     async function hydrateLectureDetails() {
       if (!lectureId) return;
 
       try {
+        if (isSupabaseMode()) {
+          const response = await fetch(`${getSupabaseRestBase()}/lectures?id=eq.${encodeURIComponent(lectureId)}&select=*`, {
+            headers: getSupabaseHeaders()
+          });
+          if (!response.ok) return;
+
+          const rows = await response.json();
+          const data = Array.isArray(rows) && rows.length ? rows[0] : null;
+          if (!data) return;
+
+          document.getElementById('subject').textContent = data.subject || '-';
+          document.getElementById('doctor').textContent = data.doctor || '-';
+          document.getElementById('room').textContent = data.room_number || data.roomNumber || '-';
+          document.getElementById('time').textContent = `${data.start_time || data.startTime || '--:--'} - ${data.end_time || data.endTime || '--:--'}`;
+          return;
+        }
+
         const response = await fetch(`${getApiBase()}/api/lectures/${encodeURIComponent(lectureId)}`);
         if (!response.ok) return;
 
@@ -218,6 +266,34 @@
 
       if (!getApiBase() && window.location.hostname.includes('github.io')) {
         alert('Backend API is not configured. Ask doctor to regenerate QR after setting API URL.');
+        return;
+      }
+
+      if (getApiBase().includes('supabase.co') && !getSupabaseAnonKey()) {
+        alert('Supabase anon key is missing. Ask doctor to set Supabase Key and regenerate QR.');
+        return;
+      }
+
+      if (isSupabaseMode()) {
+        const response = await fetch(`${getSupabaseRestBase()}/rpc/checkin_student`, {
+          method: 'POST',
+          headers: getSupabaseHeaders(),
+          body: JSON.stringify({
+            p_lecture_id: lectureId,
+            p_student_id: id,
+            p_student_name: name,
+            p_password: password
+          })
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({ message: 'Check-in failed.' }));
+          alert(payload.message || payload.error || 'Check-in failed.');
+          return;
+        }
+
+        const msg = document.getElementById('successMsg');
+        msg.style.display = 'block';
         return;
       }
 

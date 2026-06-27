@@ -202,6 +202,7 @@
       <div class="link-box">
         <input id="checkinLink" type="text" readonly value="" />
         <button class="mini-btn" onclick="configureApiBase()">API URL</button>
+        <button class="mini-btn" onclick="configureSupabaseKey()">Supabase Key</button>
         <button class="mini-btn" onclick="copyCheckinLink()">Copy Link</button>
       </div>
     </div>
@@ -218,6 +219,7 @@
     const subject = params.get('subject');
     const doctor = params.get('doctor');
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
+    const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
     let latestCheckinLink = '';
 
     function goBackToSubject() {
@@ -251,6 +253,10 @@
       return normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
     }
 
+    function getSupabaseAnonKey() {
+      return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+    }
+
     function configureApiBase() {
       const current = getApiBase();
       const value = prompt('Enter backend API base URL (example: https://your-api.onrender.com)', current);
@@ -270,9 +276,29 @@
       document.getElementById('qrImage').src = buildQrUrl(qrValue);
     }
 
+    function configureSupabaseKey() {
+      const current = getSupabaseAnonKey();
+      const value = prompt('Enter Supabase anon key (public key)', current);
+      if (value === null) return;
+
+      const normalized = value.trim();
+      if (!normalized) {
+        localStorage.removeItem(SUPABASE_ANON_KEY_STORAGE_KEY);
+      } else {
+        localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, normalized);
+      }
+
+      if (!lecture) return;
+      const qrValue = buildCheckinUrl(lecture);
+      latestCheckinLink = qrValue;
+      document.getElementById('checkinLink').value = qrValue;
+      document.getElementById('qrImage').src = buildQrUrl(qrValue);
+    }
+
     function buildCheckinUrl(data) {
       const baseUrl = getBaseUrl();
       const apiBase = getApiBase();
+      const supabaseKey = getSupabaseAnonKey();
       const search = new URLSearchParams({
         lectureId: data.id || '',
         subject: subject || '',
@@ -284,6 +310,10 @@
 
       if (apiBase) {
         search.set('apiBase', apiBase);
+      }
+
+      if (supabaseKey) {
+        search.set('sbKey', supabaseKey);
       }
 
       return `${baseUrl}/student-checkin.html?${search.toString()}`;
@@ -332,8 +362,8 @@
       document.getElementById('qrImage').src = buildQrUrl(qrValue);
       if (window.location.protocol === 'file:') {
         document.getElementById('qrHint').textContent = 'For phone scanning, run with Live Server and replace YOUR-PC-IP in link.';
-      } else if (window.location.hostname.includes('github.io') && !getApiBase()) {
-        document.getElementById('qrHint').textContent = 'Set API URL first so student check-in can be saved to backend.';
+      } else if (window.location.hostname.includes('github.io') && (!getApiBase() || !getSupabaseAnonKey())) {
+        document.getElementById('qrHint').textContent = 'Set API URL and Supabase Key first so student check-in can be saved.';
       } else {
         document.getElementById('qrHint').textContent = 'Students can scan this QR to open check-in page on phone.';
       }

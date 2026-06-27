@@ -354,6 +354,7 @@
     <div class="page-title" id="pageTitle">Subject Details</div>
     <div style="display:flex; gap:8px;">
       <button class="back-btn" onclick="configureApiBase()">API URL</button>
+      <button class="back-btn" onclick="configureSupabaseKey()">Supabase Key</button>
       <button class="back-btn" onclick="openPopup()">Add Lecture</button>
     </div>
   </div>
@@ -385,6 +386,7 @@
   <script>
     const HISTORY_KEY = 'pageHistory';
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
+    const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
     const LOCAL_LECTURES_KEY_PREFIX = 'savedLectures';
     const params = new URLSearchParams(window.location.search);
     const subject = params.get('subject');
@@ -420,6 +422,54 @@
       return normalizeApiBase(stored);
     }
 
+    function getSupabaseRestBase() {
+      const base = getApiBase();
+      if (!base) return '';
+      if (base.includes('/rest/v1')) return base;
+      if (base.includes('.supabase.co')) return `${base}/rest/v1`;
+      return '';
+    }
+
+    function getSupabaseAnonKey() {
+      return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+    }
+
+    function isSupabaseConfigured() {
+      return !!(getSupabaseRestBase() && getSupabaseAnonKey());
+    }
+
+    function getSupabaseHeaders() {
+      const key = getSupabaseAnonKey();
+      return {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`
+      };
+    }
+
+    function mapLectureFromDb(lecture) {
+      return {
+        id: lecture.id,
+        subject: lecture.subject,
+        doctor: lecture.doctor,
+        roomNumber: lecture.room_number || lecture.roomNumber || '-',
+        startTime: lecture.start_time || lecture.startTime || '-',
+        endTime: lecture.end_time || lecture.endTime || '-',
+        password: lecture.password || '-'
+      };
+    }
+
+    function mapLectureToDb(payload) {
+      return {
+        subject: payload.subject,
+        doctor: payload.doctor,
+        room_number: payload.roomNumber,
+        start_time: payload.startTime,
+        end_time: payload.endTime,
+        password: payload.password
+      };
+    }
+
     function configureApiBase() {
       const current = getApiBase();
       const value = prompt('Enter backend API base URL (example: https://your-api.onrender.com)', current);
@@ -436,7 +486,41 @@
       alert('API URL saved.');
     }
 
+    function configureSupabaseKey() {
+      const current = getSupabaseAnonKey();
+      const value = prompt('Enter Supabase anon key (public key)', current);
+      if (value === null) return;
+
+      const normalized = value.trim();
+      if (!normalized) {
+        localStorage.removeItem(SUPABASE_ANON_KEY_STORAGE_KEY);
+        alert('Supabase key removed.');
+        return;
+      }
+
+      localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, normalized);
+      alert('Supabase key saved.');
+    }
+
     async function fetchLectures() {
+      if (isSupabaseConfigured()) {
+        const restBase = getSupabaseRestBase();
+        const url = `${restBase}/lectures?subject=eq.${encodeURIComponent(subjectText)}&doctor=eq.${encodeURIComponent(doctorText)}&order=created_at.desc&select=*`;
+
+        const response = await fetch(url, {
+          headers: getSupabaseHeaders()
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to load lectures from Supabase.');
+        }
+
+        const rows = await response.json();
+        const mapped = rows.map(mapLectureFromDb);
+        saveLocalLectures(mapped);
+        return mapped;
+      }
+
       const search = new URLSearchParams({
         subject: subjectText,
         doctor: doctorText
@@ -519,6 +603,25 @@
     }
 
     async function deleteLecture(id) {
+      if (isSupabaseConfigured()) {
+        try {
+          const response = await fetch(`${getSupabaseRestBase()}/lectures?id=eq.${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: getSupabaseHeaders()
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to delete lecture from Supabase.');
+          }
+        } catch {
+          const localLectures = loadLocalLectures().filter((lecture) => lecture.id !== id);
+          saveLocalLectures(localLectures);
+        }
+
+        renderLectures();
+        return;
+      }
+
       try {
         const response = await fetch(`${getApiBase()}/api/lectures/${encodeURIComponent(id)}`, {
           method: 'DELETE'
@@ -562,6 +665,45 @@
         endTime,
         password
       };
+
+      if (isSupabaseConfigured()) {
+        try {
+          const response = await fetch(`${getSupabaseRestBase()}/lectures`, {
+            method: 'POST',
+            headers: {
+              ...getSupabaseHeaders(),
+              Prefer: 'return=representation'
+            },
+            body: JSON.stringify(mapLectureToDb(payload))
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to save lecture to Supabase.');
+          }
+
+          const rows = await response.json();
+          if (Array.isArray(rows) && rows.length) {
+            const localLectures = loadLocalLectures();
+            localLectures.unshift(mapLectureFromDb(rows[0]));
+            saveLocalLectures(localLectures);
+          }
+        } catch {
+          const localLectures = loadLocalLectures();
+          localLectures.push({
+            id: `local-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            ...payload
+          });
+          saveLocalLectures(localLectures);
+        }
+
+        renderLectures();
+        closePopup();
+        document.getElementById('roomNumber').value = '';
+        document.getElementById('startTime').value = '';
+        document.getElementById('endTime').value = '';
+        document.getElementById('lecturePassword').value = '';
+        return;
+      }
 
       try {
         const response = await fetch(`${getApiBase()}/api/lectures`, {
