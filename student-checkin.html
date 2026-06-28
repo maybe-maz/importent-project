@@ -148,9 +148,10 @@
         <input id="password" type="password" placeholder="Enter lecture password" />
       </div>
 
-      <button class="btn" onclick="submitCheckin()">Submit Check-in</button>
+      <button class="btn" id="submitBtn" onclick="submitCheckin()">Submit Check-in</button>
       <div class="msg" id="successMsg">Check-in submitted successfully.</div>
       <div class="warn" id="passwordRule">Password is only required if check-in is after 15 minutes from lecture start.</div>
+      <div class="warn" id="rssiRule" style="display:none;"></div>
     </div>
   </div>
 
@@ -168,6 +169,9 @@
     const CHECKIN_LOCK_PREFIX = 'checkinLock';
     const CHECKIN_META_PREFIX = 'checkinMeta';
     const NEXT_PAGE = 'student-checkin-next.html';
+    const MIN_ALLOWED_RSSI = -70;
+    const parsedRssi = Number(params.get('rssi'));
+    const hasRssi = Number.isFinite(parsedRssi);
     let lectureStartTime = decodeURIComponent(start);
     let passwordUiTimerId = null;
 
@@ -374,6 +378,39 @@
       return `${CHECKIN_META_PREFIX}::${lectureId}`;
     }
 
+    function isRssiAllowed() {
+      if (!hasRssi) return true;
+      return parsedRssi >= MIN_ALLOWED_RSSI;
+    }
+
+    function updateRssiUi() {
+      const rule = document.getElementById('rssiRule');
+      const submitBtn = document.getElementById('submitBtn');
+
+      if (!hasRssi) {
+        rule.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+        submitBtn.style.cursor = 'pointer';
+        return;
+      }
+
+      if (!isRssiAllowed()) {
+        rule.style.display = 'block';
+        rule.textContent = `Signal is too weak (RSSI ${parsedRssi}). You must be at least ${MIN_ALLOWED_RSSI} or stronger.`;
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+        submitBtn.style.cursor = 'not-allowed';
+        return;
+      }
+
+      rule.style.display = 'block';
+      rule.textContent = `Signal accepted (RSSI ${parsedRssi}).`;
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+      submitBtn.style.cursor = 'pointer';
+    }
+
     function markCheckinDone(studentId, studentName) {
       if (!lectureId) return;
       localStorage.setItem(getCheckinLockKey(), '1');
@@ -440,6 +477,11 @@
     }
 
     async function submitCheckin() {
+      if (!isRssiAllowed()) {
+        alert(`Cannot submit check-in: RSSI is weaker than ${MIN_ALLOWED_RSSI}.`);
+        return;
+      }
+
       const id = document.getElementById('studentId').value.trim();
       const name = document.getElementById('studentName').value.trim();
       const password = document.getElementById('password').value.trim();
@@ -540,6 +582,7 @@
 
     redirectIfAlreadyCheckedIn();
     updatePasswordRequirementUi();
+    updateRssiUi();
     passwordUiTimerId = setInterval(updatePasswordRequirementUi, 30000);
     hydrateLectureDetails();
 
