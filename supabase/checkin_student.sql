@@ -59,7 +59,7 @@ begin
     v_note := 'Over 15 minutes late';
   end if;
 
-  if v_status = 'absent' and coalesce(v_lecture.password, '') <> coalesce(p_password, '') then
+  if v_status = 'absent' and btrim(coalesce(v_lecture.password, '')) <> btrim(coalesce(p_password, '')) then
     raise exception 'Wrong lecture password.';
   end if;
 

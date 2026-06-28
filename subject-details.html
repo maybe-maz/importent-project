@@ -697,10 +697,10 @@
     }
 
     async function saveLecture() {
-      const roomNumber = document.getElementById('roomNumber').value;
-      const startTime = document.getElementById('startTime').value;
-      const endTime = document.getElementById('endTime').value;
-      const password = document.getElementById('lecturePassword').value;
+      const roomNumber = document.getElementById('roomNumber').value.trim();
+      const startTime = document.getElementById('startTime').value.trim();
+      const endTime = document.getElementById('endTime').value.trim();
+      const password = document.getElementById('lecturePassword').value.trim();
 
       if (!roomNumber || !startTime || !endTime || !password) {
         alert('Please fill all fields');

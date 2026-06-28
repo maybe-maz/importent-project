@@ -114,8 +114,9 @@ app.get('/api/lectures/:id', async (req, res) => {
 
 app.post('/api/lectures', async (req, res) => {
   const { subject, doctor, roomNumber, startTime, endTime, password } = req.body || {};
+  const normalizedPassword = String(password || '').trim();
 
-  if (!subject || !doctor || !roomNumber || !startTime || !endTime || !password) {
+  if (!subject || !doctor || !roomNumber || !startTime || !endTime || !normalizedPassword) {
     res.status(400).json({ message: 'Missing required fields.' });
     return;
   }
@@ -128,7 +129,7 @@ app.post('/api/lectures', async (req, res) => {
     roomNumber,
     startTime,
     endTime,
-    password,
+    password: normalizedPassword,
     createdAt: new Date().toISOString()
   };
 
@@ -186,7 +187,9 @@ app.post('/api/checkin', async (req, res) => {
   }
 
   const status = computeAttendanceStatus(lecture.startTime);
-  if (status === 'absent' && lecture.password !== (password || '')) {
+  const normalizedLecturePassword = String(lecture.password || '').trim();
+  const normalizedProvidedPassword = String(password || '').trim();
+  if (status === 'absent' && normalizedLecturePassword !== normalizedProvidedPassword) {
     res.status(401).json({ message: 'Wrong lecture password.' });
     return;
   }
