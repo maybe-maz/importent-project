@@ -22,6 +22,7 @@ as $$
 declare
   v_lecture lectures%rowtype;
   v_now timestamptz := now();
+  v_start_time time := time '00:00';
   v_diff_minutes numeric := 0;
   v_status text := 'present';
   v_note text := '-';
@@ -43,8 +44,13 @@ begin
     raise exception 'Wrong lecture password.';
   end if;
 
+  -- start_time can be stored as text or time depending on schema revisions.
+  if v_lecture.start_time is not null and v_lecture.start_time::text ~ '^\d{2}:\d{2}(:\d{2})?$' then
+    v_start_time := v_lecture.start_time::text::time;
+  end if;
+
   -- Compare check-in time to lecture start time on the same date.
-  v_diff_minutes := extract(epoch from (v_now - date_trunc('day', v_now) - coalesce(v_lecture.start_time, time '00:00'))) / 60.0;
+  v_diff_minutes := extract(epoch from (v_now - date_trunc('day', v_now) - v_start_time)) / 60.0;
 
   if v_diff_minutes <= 5 then
     v_status := 'present';
