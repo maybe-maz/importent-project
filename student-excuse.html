@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Submit Excuse</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+      background: #f4f8ff;
+      color: #0f172a;
+    }
+
+    .card {
+      width: min(560px, 100%);
+      background: #ffffff;
+      border: 1px solid #dbeafe;
+      border-radius: 16px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+      padding: 22px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      color: #1d4ed8;
+      text-align: center;
+    }
+
+    p {
+      margin: 8px 0;
+      color: #475569;
+      text-align: center;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: #475569;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px;
+      resize: vertical;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    .actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      background: #2563eb;
+      cursor: pointer;
+    }
+
+    .btn.back {
+      background: #0f766e;
+    }
+
+    .status-msg {
+      margin-top: 10px;
+      color: #0f766e;
+      font-size: 13px;
+      font-weight: 700;
+      min-height: 18px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Excuse Request</h1>
+    <p id="studentRef">Student: -</p>
+    <p id="lectureRef">Lecture ID: -</p>
+
+    <label for="excuseReason">Reason</label>
+    <textarea id="excuseReason" placeholder="Write your excuse..."></textarea>
+
+    <div class="actions">
+      <button class="btn back" onclick="goBack()">Back</button>
+      <button class="btn" onclick="submitExcuse()">Send</button>
+    </div>
+
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const lectureId = params.get('lectureId') || '';
+    const studentId = params.get('studentId') || '';
+    const studentName = params.get('studentName') || '';
+    const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
+    const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
+
+    document.getElementById('lectureRef').textContent = lectureId ? `Lecture ID: ${lectureId}` : 'Lecture ID: -';
+    if (studentId || studentName) {
+      document.getElementById('studentRef').textContent = `Student: ${studentName || '-'} (${studentId || '-'})`;
+    }
+
+    function normalizeApiBase(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/\/+$/, '');
+    }
+
+    function getApiBase() {
+      return normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
+    }
+
+    function getSupabaseRestBase() {
+      const base = getApiBase();
+      if (!base) return '';
+      if (base.includes('/rest/v1')) return base;
+      if (base.includes('.supabase.co')) return `${base}/rest/v1`;
+      return '';
+    }
+
+    function getSupabaseAnonKey() {
+      return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+    }
+
+    function isSupabaseMode() {
+      return !!(getSupabaseRestBase() && getSupabaseAnonKey());
+    }
+
+    function isUuid(value) {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test((value || '').trim());
+    }
+
+    function getSupabaseHeaders() {
+      const key = getSupabaseAnonKey();
+      return {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`
+      };
+    }
+
+    function setStatusMessage(message, isError = false) {
+      const el = document.getElementById('statusMsg');
+      el.textContent = message;
+      el.style.color = isError ? '#b91c1c' : '#0f766e';
+    }
+
+    function goBack() {
+      window.location.href = `student-checkin-next.html?${params.toString()}`;
+    }
+
+    async function submitExcuse() {
+      const reason = document.getElementById('excuseReason').value.trim();
+      if (!reason) {
+        setStatusMessage('Please write an excuse reason first.', true);
+        return;
+      }
+
+      if (!lectureId || !studentId) {
+        setStatusMessage('Lecture or student data is missing.', true);
+        return;
+      }
+
+      const note = `Excuse: ${reason}`;
+
+      if (isSupabaseMode()) {
+        if (!isUuid(lectureId)) {
+          setStatusMessage('Lecture ID is not valid for Supabase.', true);
+          return;
+        }
+
+        const response = await fetch(`${getSupabaseRestBase()}/attendance?lecture_id=eq.${encodeURIComponent(lectureId)}&student_id=eq.${encodeURIComponent(studentId)}`, {
+          method: 'PATCH',
+          headers: {
+            ...getSupabaseHeaders(),
+            Prefer: 'return=representation'
+          },
+          body: JSON.stringify({ note })
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({ message: 'Failed to send excuse.' }));
+          setStatusMessage(payload.message || payload.error || 'Failed to send excuse.', true);
+          return;
+        }
+
+        setStatusMessage('Excuse sent successfully.');
+        document.getElementById('excuseReason').value = '';
+        return;
+      }
+
+      if (!getApiBase() && window.location.hostname.includes('github.io')) {
+        setStatusMessage('Backend API is not configured.', true);
+        return;
+      }
+
+      const response = await fetch(`${getApiBase()}/api/attendance/note`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          lectureId,
+          studentId,
+          studentName,
+          note
+        })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ message: 'Failed to send excuse.' }));
+        setStatusMessage(payload.message || 'Failed to send excuse.', true);
+        return;
+      }
+
+      setStatusMessage('Excuse sent successfully.');
+      document.getElementById('excuseReason').value = '';
+    }
+  </script>
+</body>
+</html>

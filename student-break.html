@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Break Timer</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+      background: #f4f8ff;
+      color: #0f172a;
+    }
+
+    .card {
+      width: min(540px, 100%);
+      background: #ffffff;
+      border: 1px solid #dbeafe;
+      border-radius: 16px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+      padding: 22px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      color: #1d4ed8;
+    }
+
+    p {
+      margin: 8px 0;
+      color: #475569;
+    }
+
+    .timer {
+      margin-top: 14px;
+      font-size: 40px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: 1px;
+    }
+
+    .hint {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .btn {
+      margin-top: 16px;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      background: #0f766e;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Break 5 Minutes</h1>
+    <p id="studentRef">Student: -</p>
+    <p id="lectureRef">Lecture ID: -</p>
+    <div class="timer" id="timer">05:00</div>
+    <div class="hint" id="status">Break started.</div>
+    <button class="btn" onclick="goBack()">I'm Back From Break</button>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const lectureId = params.get('lectureId') || '';
+    const studentId = params.get('studentId') || '';
+    const studentName = params.get('studentName') || '';
+
+    document.getElementById('lectureRef').textContent = lectureId ? `Lecture ID: ${lectureId}` : 'Lecture ID: -';
+    if (studentId || studentName) {
+      document.getElementById('studentRef').textContent = `Student: ${studentName || '-'} (${studentId || '-'})`;
+    }
+
+    let endAt = Date.now() + (5 * 60 * 1000);
+    let timerId = null;
+
+    function formatTime(totalSec) {
+      const safe = Math.max(0, totalSec);
+      const mm = Math.floor(safe / 60);
+      const ss = safe % 60;
+      return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+    }
+
+    function tick() {
+      const leftMs = endAt - Date.now();
+      const leftSec = Math.ceil(leftMs / 1000);
+      document.getElementById('timer').textContent = formatTime(leftSec);
+
+      if (leftMs <= 0) {
+        clearInterval(timerId);
+        timerId = null;
+        document.getElementById('timer').textContent = '00:00';
+        document.getElementById('status').textContent = 'Break finished. Press the return button.';
+      }
+    }
+
+    function goBack() {
+      window.location.href = `student-checkin-next.html?${params.toString()}`;
+    }
+
+    tick();
+    timerId = setInterval(tick, 1000);
+
+    window.addEventListener('beforeunload', () => {
+      if (timerId) {
+        clearInterval(timerId);
+      }
+    });
+  </script>
+</body>
+</html>
