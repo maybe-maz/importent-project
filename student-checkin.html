@@ -415,13 +415,16 @@
         return;
       }
 
-      if (!getApiBase() && window.location.hostname.includes('github.io')) {
-        alert('Backend API is not configured. Ask doctor to regenerate QR after setting API URL.');
+      const apiBase = getApiBase();
+      const sbKey = getSupabaseAnonKey();
+
+      if (!apiBase && window.location.hostname.includes('github.io')) {
+        alert('Configuration is missing. Set apiBase and supabaseAnonKey in app-config.js, then refresh.');
         return;
       }
 
-      if (getApiBase().includes('supabase.co') && !getSupabaseAnonKey()) {
-        alert('Supabase anon key is missing. Ask doctor to set Supabase Key and regenerate QR.');
+      if (apiBase.includes('supabase.co') && !sbKey) {
+        alert('Supabase anon key is missing. Set supabaseAnonKey in app-config.js, then refresh.');
         return;
       }
 
