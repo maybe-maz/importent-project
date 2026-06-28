@@ -181,6 +181,24 @@
       return trimmed.replace(/\/+$/, '');
     }
 
+    function inferApiBaseFromAnonKey() {
+      const rawKey = (params.get('sbKey') || localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+      if (!rawKey || rawKey.split('.').length < 2) return '';
+
+      try {
+        const payloadPart = rawKey.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = payloadPart.padEnd(payloadPart.length + ((4 - (payloadPart.length % 4)) % 4), '=');
+        const json = atob(padded);
+        const payload = JSON.parse(json);
+        const iss = String(payload.iss || '').trim();
+        if (!iss) return '';
+
+        return normalizeApiBase(iss.replace(/\/auth\/v1\/?$/, ''));
+      } catch {
+        return '';
+      }
+    }
+
     function getApiBase() {
       const fromQuery = normalizeApiBase(params.get('apiBase') || '');
       if (fromQuery) {
@@ -190,6 +208,12 @@
 
       const fromStorage = normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
       if (fromStorage) return fromStorage;
+
+      const fromSbKey = inferApiBaseFromAnonKey();
+      if (fromSbKey) {
+        localStorage.setItem(API_BASE_STORAGE_KEY, fromSbKey);
+        return fromSbKey;
+      }
 
       return '';
     }
