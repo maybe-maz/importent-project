@@ -170,6 +170,7 @@
     const CHECKIN_META_PREFIX = 'checkinMeta';
     const NEXT_PAGE = 'student-checkin-next.html';
     const MIN_ALLOWED_RSSI = -70;
+    const MAX_ALLOWED_RSSI = -10;
     const parsedRssi = Number(params.get('rssi'));
     const hasRssi = Number.isFinite(parsedRssi);
     let lectureStartTime = decodeURIComponent(start);
@@ -379,8 +380,8 @@
     }
 
     function isRssiAllowed() {
-      if (!hasRssi) return true;
-      return parsedRssi >= MIN_ALLOWED_RSSI;
+      if (!hasRssi) return false;
+      return parsedRssi >= MIN_ALLOWED_RSSI && parsedRssi <= MAX_ALLOWED_RSSI;
     }
 
     function updateRssiUi() {
@@ -388,16 +389,17 @@
       const submitBtn = document.getElementById('submitBtn');
 
       if (!hasRssi) {
-        rule.style.display = 'none';
-        submitBtn.disabled = false;
-        submitBtn.style.opacity = '1';
-        submitBtn.style.cursor = 'pointer';
+        rule.style.display = 'block';
+        rule.textContent = 'RSSI is missing. Rescan from the app to continue.';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+        submitBtn.style.cursor = 'not-allowed';
         return;
       }
 
       if (!isRssiAllowed()) {
         rule.style.display = 'block';
-        rule.textContent = `Signal is too weak (RSSI ${parsedRssi}). You must be at least ${MIN_ALLOWED_RSSI} or stronger.`;
+        rule.textContent = `Signal out of range (RSSI ${parsedRssi}). Allowed range is ${MIN_ALLOWED_RSSI} to ${MAX_ALLOWED_RSSI}.`;
         submitBtn.disabled = true;
         submitBtn.style.opacity = '0.6';
         submitBtn.style.cursor = 'not-allowed';
@@ -405,7 +407,7 @@
       }
 
       rule.style.display = 'block';
-      rule.textContent = `Signal accepted (RSSI ${parsedRssi}).`;
+      rule.textContent = `Signal accepted (RSSI ${parsedRssi}). Allowed range matched.`;
       submitBtn.disabled = false;
       submitBtn.style.opacity = '1';
       submitBtn.style.cursor = 'pointer';
@@ -478,7 +480,7 @@
 
     async function submitCheckin() {
       if (!isRssiAllowed()) {
-        alert(`Cannot submit check-in: RSSI is weaker than ${MIN_ALLOWED_RSSI}.`);
+        alert(`Cannot submit check-in: RSSI must be between ${MIN_ALLOWED_RSSI} and ${MAX_ALLOWED_RSSI}.`);
         return;
       }
 
