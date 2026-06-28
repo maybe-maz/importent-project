@@ -154,6 +154,7 @@
     </div>
   </div>
 
+  <script src="app-config.js"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
     const lectureId = params.get('lectureId') || '';
@@ -209,6 +210,12 @@
       const fromStorage = normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
       if (fromStorage) return fromStorage;
 
+      const fromConfig = normalizeApiBase((window.APP_CONFIG && window.APP_CONFIG.apiBase) || '');
+      if (fromConfig) {
+        localStorage.setItem(API_BASE_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
       const fromSbKey = inferApiBaseFromAnonKey();
       if (fromSbKey) {
         localStorage.setItem(API_BASE_STORAGE_KEY, fromSbKey);
@@ -232,7 +239,17 @@
         localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, fromQuery);
         return fromQuery;
       }
-      return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+
+      const fromStorage = (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = ((window.APP_CONFIG && window.APP_CONFIG.supabaseAnonKey) || '').trim();
+      if (fromConfig) {
+        localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
     }
 
     function buildNextPageUrl(studentId, studentName) {

@@ -381,6 +381,7 @@
     </div>
   </div>
 
+  <script src="app-config.js"></script>
   <script>
     const HISTORY_KEY = 'pageHistory';
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
@@ -446,7 +447,16 @@
 
     function getApiBase() {
       const stored = localStorage.getItem(API_BASE_STORAGE_KEY) || '';
-      return normalizeApiBase(stored);
+      const normalizedStored = normalizeApiBase(stored);
+      if (normalizedStored) return normalizedStored;
+
+      const fromConfig = normalizeApiBase((window.APP_CONFIG && window.APP_CONFIG.apiBase) || '');
+      if (fromConfig) {
+        localStorage.setItem(API_BASE_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
     }
 
     function getSupabaseRestBase() {
@@ -458,7 +468,16 @@
     }
 
     function getSupabaseAnonKey() {
-      return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+      const fromStorage = (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = ((window.APP_CONFIG && window.APP_CONFIG.supabaseAnonKey) || '').trim();
+      if (fromConfig) {
+        localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
     }
 
     function isSupabaseConfigured() {
