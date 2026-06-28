@@ -388,6 +388,7 @@
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
     const LOCAL_LECTURES_KEY_PREFIX = 'savedLectures';
+    const HIDDEN_LECTURES_KEY_PREFIX = 'hiddenLectures';
     const params = new URLSearchParams(window.location.search);
     const subject = params.get('subject');
     const doctor = params.get('doctor');
@@ -397,6 +398,10 @@
 
     function getLocalLecturesKey() {
       return `${LOCAL_LECTURES_KEY_PREFIX}::${subjectText}::${doctorText}`;
+    }
+
+    function getHiddenLecturesKey() {
+      return `${HIDDEN_LECTURES_KEY_PREFIX}::${subjectText}::${doctorText}`;
     }
 
     function loadLocalLectures() {
@@ -409,6 +414,30 @@
 
     function saveLocalLectures(lectures) {
       localStorage.setItem(getLocalLecturesKey(), JSON.stringify(lectures));
+    }
+
+    function loadHiddenLectureIds() {
+      try {
+        const value = JSON.parse(localStorage.getItem(getHiddenLecturesKey()) || '[]');
+        return Array.isArray(value) ? value : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveHiddenLectureIds(ids) {
+      localStorage.setItem(getHiddenLecturesKey(), JSON.stringify(ids));
+    }
+
+    function hideLectureLocally(id) {
+      const hidden = new Set(loadHiddenLectureIds());
+      hidden.add(id);
+      saveHiddenLectureIds(Array.from(hidden));
+    }
+
+    function unhideLectureLocally(id) {
+      const next = loadHiddenLectureIds().filter((item) => item !== id);
+      saveHiddenLectureIds(next);
     }
 
     function normalizeApiBase(value) {
@@ -470,6 +499,19 @@
       };
     }
 
+    function generateLectureId() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+
+      // Fallback UUID v4-like generator for older browsers.
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
     function configureApiBase() {
       const current = getApiBase();
       const value = prompt('Enter backend API base URL (example: https://your-api.onrender.com)', current);
@@ -503,6 +545,8 @@
     }
 
     async function fetchLectures() {
+      const hiddenIds = new Set(loadHiddenLectureIds());
+
       if (isSupabaseConfigured()) {
         const restBase = getSupabaseRestBase();
         const url = `${restBase}/lectures?subject=eq.${encodeURIComponent(subjectText)}&doctor=eq.${encodeURIComponent(doctorText)}&order=created_at.desc&select=*`;
@@ -516,7 +560,9 @@
         }
 
         const rows = await response.json();
-        const mapped = rows.map(mapLectureFromDb);
+        const mapped = rows
+          .map(mapLectureFromDb)
+          .filter((lecture) => !hiddenIds.has(String(lecture.id)));
         saveLocalLectures(mapped);
         return mapped;
       }
@@ -533,10 +579,11 @@
         }
 
         const apiLectures = await response.json();
-        saveLocalLectures(apiLectures);
-        return apiLectures;
+        const filtered = apiLectures.filter((lecture) => !hiddenIds.has(String(lecture.id)));
+        saveLocalLectures(filtered);
+        return filtered;
       } catch {
-        return loadLocalLectures();
+        return loadLocalLectures().filter((lecture) => !hiddenIds.has(String(lecture.id)));
       }
     }
 
@@ -611,11 +658,16 @@
           });
 
           if (!response.ok) {
-            throw new Error('Failed to delete lecture from Supabase.');
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.message || payload.error || 'Failed to delete lecture from Supabase.');
           }
+
+          unhideLectureLocally(id);
         } catch {
+          hideLectureLocally(id);
           const localLectures = loadLocalLectures().filter((lecture) => lecture.id !== id);
           saveLocalLectures(localLectures);
+          alert('Delete permission is blocked on Supabase. The lecture was hidden locally on this device.');
         }
 
         renderLectures();
@@ -631,6 +683,7 @@
           throw new Error('Failed to delete lecture.');
         }
       } catch {
+        hideLectureLocally(id);
         const localLectures = loadLocalLectures().filter((lecture) => lecture.id !== id);
         saveLocalLectures(localLectures);
       }
@@ -690,7 +743,7 @@
         } catch {
           const localLectures = loadLocalLectures();
           localLectures.push({
-            id: `local-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            id: generateLectureId(),
             ...payload
           });
           saveLocalLectures(localLectures);
@@ -720,7 +773,7 @@
       } catch {
         const localLectures = loadLocalLectures();
         localLectures.push({
-          id: `local-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          id: generateLectureId(),
           ...payload
         });
         saveLocalLectures(localLectures);

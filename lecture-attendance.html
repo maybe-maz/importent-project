@@ -142,6 +142,13 @@
       font-weight: 600;
     }
 
+    .timer {
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
     .stats {
       padding: 16px 18px;
       display: grid;
@@ -315,6 +322,7 @@
           <h1 class="title" id="subjectTitle">Subject</h1>
         </div>
         <div class="time" id="lectureTime">--:-- - --:-- 🕒</div>
+        <div class="timer" id="lectureTimer">Timer: --</div>
       </div>
     </div>
 
@@ -350,12 +358,7 @@
     const lecture = JSON.parse(sessionStorage.getItem('selectedLecture') || 'null');
     const subjectName = subject || 'Subject';
     const doctorName = doctor || 'No doctor';
-
-    const DEFAULT_STUDENTS = [
-      { id: '241100150', name: 'Yahya Shujaa', time: '21:36:48', status: 'present', note: '-' },
-      { id: '231100147', name: 'Rayan Alqahtani', time: '21:42:48', status: 'late', note: '-' },
-      { id: '241100519', name: 'Mazen Almunjad', time: '21:50:36', status: 'absent', note: '-' }
-    ];
+    let lectureTimerIntervalId = null;
 
     let students = [];
 
@@ -385,6 +388,10 @@
       return !!(getSupabaseRestBase() && getSupabaseAnonKey());
     }
 
+    function isUuid(value) {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test((value || '').trim());
+    }
+
     function getSupabaseHeaders() {
       const key = getSupabaseAnonKey();
       return {
@@ -412,15 +419,11 @@
       ].join('::');
     }
 
-    function getAttendanceKey() {
-      return `attendance::${subjectName}::${doctorName}::${getLectureId()}`;
-    }
-
     async function loadAttendance() {
       const lectureId = getLectureId();
       if (lectureId && lectureId !== 'default-lecture') {
         try {
-          if (isSupabaseMode()) {
+          if (isSupabaseMode() && isUuid(lectureId)) {
             const response = await fetch(`${getSupabaseRestBase()}/attendance?lecture_id=eq.${encodeURIComponent(lectureId)}&select=*`, {
               headers: getSupabaseHeaders()
             });
@@ -433,9 +436,6 @@
                 status: row.status || 'absent',
                 note: row.note || '-'
               }));
-              if (!students.length) {
-                students = DEFAULT_STUDENTS.map((student) => ({ ...student }));
-              }
               renderStats();
               renderTable();
               return;
@@ -453,25 +453,9 @@
         }
       }
 
-      try {
-        const stored = localStorage.getItem(getAttendanceKey());
-        if (stored) {
-          students = JSON.parse(stored);
-          renderStats();
-          renderTable();
-          return;
-        }
-      } catch {
-      }
-
-      students = DEFAULT_STUDENTS.map((student) => ({ ...student }));
-      saveAttendance();
+      students = [];
       renderStats();
       renderTable();
-    }
-
-    function saveAttendance() {
-      localStorage.setItem(getAttendanceKey(), JSON.stringify(students));
     }
 
     function goBackToSubject() {
@@ -550,6 +534,11 @@
       const lectureId = getLectureId();
       if (!target || !lectureId) return;
 
+      if (isSupabaseMode() && !isUuid(lectureId)) {
+        alert('This lecture ID is not a valid UUID for Supabase. Open a synced lecture and regenerate data.');
+        return;
+      }
+
       if (isSupabaseMode()) {
         const response = await fetch(`${getSupabaseRestBase()}/attendance?on_conflict=lecture_id,student_id`, {
           method: 'POST',
@@ -620,6 +609,66 @@
       URL.revokeObjectURL(link.href);
     }
 
+    function parseTimeToday(value) {
+      if (!value || typeof value !== 'string' || !/^\d{2}:\d{2}$/.test(value)) return null;
+      const [hours, minutes] = value.split(':').map(Number);
+      if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+    }
+
+    function formatRemaining(ms) {
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      const hh = String(hours).padStart(2, '0');
+      const mm = String(minutes).padStart(2, '0');
+      const ss = String(seconds).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    }
+
+    function updateLectureTimer() {
+      const timerEl = document.getElementById('lectureTimer');
+      if (!timerEl) return;
+      if (!lecture || !lecture.startTime || !lecture.endTime) {
+        timerEl.textContent = 'Timer: unavailable';
+        return;
+      }
+
+      const startAt = parseTimeToday(lecture.startTime);
+      const endAt = parseTimeToday(lecture.endTime);
+
+      if (!startAt || !endAt || endAt <= startAt) {
+        timerEl.textContent = 'Timer: invalid schedule';
+        return;
+      }
+
+      const now = new Date();
+      if (now < startAt) {
+        timerEl.textContent = `Starts in ${formatRemaining(startAt - now)}`;
+        return;
+      }
+
+      if (now >= startAt && now < endAt) {
+        timerEl.textContent = `Ends in ${formatRemaining(endAt - now)}`;
+        return;
+      }
+
+      timerEl.textContent = 'Lecture ended';
+    }
+
+    function startLectureTimer() {
+      if (lectureTimerIntervalId) {
+        clearInterval(lectureTimerIntervalId);
+      }
+
+      updateLectureTimer();
+      lectureTimerIntervalId = setInterval(updateLectureTimer, 1000);
+    }
+
     function initHeader() {
       document.getElementById('subjectTitle').textContent = subjectName;
       document.getElementById('subjectCrumb').textContent = subjectName;
@@ -630,10 +679,17 @@
       }
 
       document.getElementById('sessionNumber').textContent = lecture && lecture.sessionNumber ? String(lecture.sessionNumber) : '1';
+      startLectureTimer();
     }
 
     initHeader();
     loadAttendance();
+
+    window.addEventListener('beforeunload', () => {
+      if (lectureTimerIntervalId) {
+        clearInterval(lectureTimerIntervalId);
+      }
+    });
   </script>
 </body>
 </html>
