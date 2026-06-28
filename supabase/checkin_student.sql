@@ -27,7 +27,7 @@ declare
   v_status text := 'present';
   v_note text := '-';
 begin
-  if p_lecture_id is null or p_student_id is null or p_student_name is null or p_password is null then
+  if p_lecture_id is null or p_student_id is null or p_student_name is null then
     raise exception 'Missing required fields.';
   end if;
 
@@ -38,10 +38,6 @@ begin
 
   if not found then
     raise exception 'Lecture not found.';
-  end if;
-
-  if coalesce(v_lecture.password, '') <> p_password then
-    raise exception 'Wrong lecture password.';
   end if;
 
   -- start_time can be stored as text or time depending on schema revisions.
@@ -61,6 +57,10 @@ begin
   else
     v_status := 'absent';
     v_note := 'Over 15 minutes late';
+  end if;
+
+  if v_status = 'absent' and coalesce(v_lecture.password, '') <> coalesce(p_password, '') then
+    raise exception 'Wrong lecture password.';
   end if;
 
   insert into public.attendance (

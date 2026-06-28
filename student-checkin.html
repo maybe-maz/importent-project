@@ -143,14 +143,14 @@
         <input id="studentName" type="text" placeholder="Enter your name" />
       </div>
 
-      <div class="field">
+      <div class="field" id="passwordField">
         <label for="password">Lecture Password</label>
         <input id="password" type="password" placeholder="Enter lecture password" />
       </div>
 
       <button class="btn" onclick="submitCheckin()">Submit Check-in</button>
       <div class="msg" id="successMsg">Check-in submitted successfully.</div>
-      <div class="warn">Check-in is sent to backend API and saved for this lecture.</div>
+      <div class="warn" id="passwordRule">Password is only required if check-in is after 15 minutes from lecture start.</div>
     </div>
   </div>
 
@@ -167,6 +167,8 @@
     const CHECKIN_LOCK_PREFIX = 'checkinLock';
     const CHECKIN_META_PREFIX = 'checkinMeta';
     const NEXT_PAGE = 'student-checkin-next.html';
+    let lectureStartTime = decodeURIComponent(start);
+    let passwordUiTimerId = null;
 
     document.getElementById('subject').textContent = decodeURIComponent(subject);
     document.getElementById('doctor').textContent = decodeURIComponent(doctor);
@@ -223,6 +225,43 @@
       };
     }
 
+    function extractHhmm(value) {
+      const match = String(value || '').match(/^(\d{2}:\d{2})/);
+      return match ? match[1] : '';
+    }
+
+    function minutesFromLectureStart() {
+      const hhmm = extractHhmm(lectureStartTime);
+      if (!hhmm) return 0;
+
+      const [h, m] = hhmm.split(':').map(Number);
+      if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+
+      const now = new Date();
+      const startAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+      return (now.getTime() - startAt.getTime()) / 60000;
+    }
+
+    function isPasswordRequiredNow() {
+      return minutesFromLectureStart() > 15;
+    }
+
+    function updatePasswordRequirementUi() {
+      const field = document.getElementById('passwordField');
+      const rule = document.getElementById('passwordRule');
+      const isRequired = isPasswordRequiredNow();
+
+      if (isRequired) {
+        field.style.display = 'block';
+        rule.textContent = 'Password is required now because check-in is after 15 minutes.';
+        return;
+      }
+
+      field.style.display = 'none';
+      document.getElementById('password').value = '';
+      rule.textContent = 'No password needed within the first 15 minutes.';
+    }
+
     function getCheckinLockKey() {
       return `${CHECKIN_LOCK_PREFIX}::${lectureId}`;
     }
@@ -276,7 +315,9 @@
           document.getElementById('subject').textContent = data.subject || '-';
           document.getElementById('doctor').textContent = data.doctor || '-';
           document.getElementById('room').textContent = data.room_number || data.roomNumber || '-';
+          lectureStartTime = data.start_time || data.startTime || lectureStartTime;
           document.getElementById('time').textContent = `${data.start_time || data.startTime || '--:--'} - ${data.end_time || data.endTime || '--:--'}`;
+          updatePasswordRequirementUi();
           return;
         }
 
@@ -287,7 +328,9 @@
         document.getElementById('subject').textContent = data.subject || '-';
         document.getElementById('doctor').textContent = data.doctor || '-';
         document.getElementById('room').textContent = data.roomNumber || '-';
+        lectureStartTime = data.startTime || lectureStartTime;
         document.getElementById('time').textContent = `${data.startTime || '--:--'} - ${data.endTime || '--:--'}`;
+        updatePasswordRequirementUi();
       } catch {
       }
     }
@@ -296,9 +339,15 @@
       const id = document.getElementById('studentId').value.trim();
       const name = document.getElementById('studentName').value.trim();
       const password = document.getElementById('password').value.trim();
+      const passwordRequired = isPasswordRequiredNow();
 
-      if (!id || !name || !password) {
-        alert('Please fill all fields.');
+      if (!id || !name) {
+        alert('Please fill student ID and student name.');
+        return;
+      }
+
+      if (passwordRequired && !password) {
+        alert('Password is required after 15 minutes from lecture start.');
         return;
       }
 
@@ -330,7 +379,7 @@
             p_lecture_id: lectureId,
             p_student_id: id,
             p_student_name: name,
-            p_password: password
+            p_password: password || null
           })
         });
 
@@ -358,7 +407,7 @@
           lectureId,
           studentId: id,
           studentName: name,
-          password
+          password: password || null
         })
       });
 
@@ -377,7 +426,15 @@
     }
 
     redirectIfAlreadyCheckedIn();
+    updatePasswordRequirementUi();
+    passwordUiTimerId = setInterval(updatePasswordRequirementUi, 30000);
     hydrateLectureDetails();
+
+    window.addEventListener('beforeunload', () => {
+      if (passwordUiTimerId) {
+        clearInterval(passwordUiTimerId);
+      }
+    });
   </script>
 </body>
 </html>

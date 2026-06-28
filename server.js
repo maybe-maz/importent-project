@@ -173,7 +173,7 @@ app.get('/api/attendance', async (req, res) => {
 
 app.post('/api/checkin', async (req, res) => {
   const { lectureId, studentId, studentName, password } = req.body || {};
-  if (!lectureId || !studentId || !studentName || !password) {
+  if (!lectureId || !studentId || !studentName) {
     res.status(400).json({ message: 'Missing required fields.' });
     return;
   }
@@ -185,7 +185,8 @@ app.post('/api/checkin', async (req, res) => {
     return;
   }
 
-  if (lecture.password !== password) {
+  const status = computeAttendanceStatus(lecture.startTime);
+  if (status === 'absent' && lecture.password !== (password || '')) {
     res.status(401).json({ message: 'Wrong lecture password.' });
     return;
   }
@@ -196,7 +197,6 @@ app.post('/api/checkin', async (req, res) => {
 
   const rows = db.attendance[lectureId];
   const idx = rows.findIndex((row) => row.id === studentId);
-  const status = computeAttendanceStatus(lecture.startTime);
   const updated = {
     id: studentId,
     name: studentName,
