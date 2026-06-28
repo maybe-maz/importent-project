@@ -353,8 +353,6 @@
   <div class="topbar">
     <div class="page-title" id="pageTitle">Subject Details</div>
     <div style="display:flex; gap:8px;">
-      <button class="back-btn" onclick="configureApiBase()">API URL</button>
-      <button class="back-btn" onclick="configureSupabaseKey()">Supabase Key</button>
       <button class="back-btn" onclick="openPopup()">Add Lecture</button>
     </div>
   </div>
@@ -510,38 +508,6 @@
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
       });
-    }
-
-    function configureApiBase() {
-      const current = getApiBase();
-      const value = prompt('Enter backend API base URL (example: https://your-api.onrender.com)', current);
-      if (value === null) return;
-
-      const normalized = normalizeApiBase(value);
-      if (!normalized) {
-        localStorage.removeItem(API_BASE_STORAGE_KEY);
-        alert('API URL removed. The app will use same-origin API.');
-        return;
-      }
-
-      localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
-      alert('API URL saved.');
-    }
-
-    function configureSupabaseKey() {
-      const current = getSupabaseAnonKey();
-      const value = prompt('Enter Supabase anon key (public key)', current);
-      if (value === null) return;
-
-      const normalized = value.trim();
-      if (!normalized) {
-        localStorage.removeItem(SUPABASE_ANON_KEY_STORAGE_KEY);
-        alert('Supabase key removed.');
-        return;
-      }
-
-      localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, normalized);
-      alert('Supabase key saved.');
     }
 
     async function fetchLectures() {

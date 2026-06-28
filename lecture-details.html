@@ -201,8 +201,6 @@
       <div class="hint" id="qrHint">QR is generated from lecture data.</div>
       <div class="link-box">
         <input id="checkinLink" type="text" readonly value="" />
-        <button class="mini-btn" onclick="configureApiBase()">API URL</button>
-        <button class="mini-btn" onclick="configureSupabaseKey()">Supabase Key</button>
         <button class="mini-btn" onclick="copyCheckinLink()">Copy Link</button>
       </div>
     </div>
@@ -255,44 +253,6 @@
 
     function getSupabaseAnonKey() {
       return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
-    }
-
-    function configureApiBase() {
-      const current = getApiBase();
-      const value = prompt('Enter backend API base URL (example: https://your-api.onrender.com)', current);
-      if (value === null) return;
-
-      const normalized = normalizeApiBase(value);
-      if (!normalized) {
-        localStorage.removeItem(API_BASE_STORAGE_KEY);
-      } else {
-        localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
-      }
-
-      if (!lecture) return;
-      const qrValue = buildCheckinUrl(lecture);
-      latestCheckinLink = qrValue;
-      document.getElementById('checkinLink').value = qrValue;
-      document.getElementById('qrImage').src = buildQrUrl(qrValue);
-    }
-
-    function configureSupabaseKey() {
-      const current = getSupabaseAnonKey();
-      const value = prompt('Enter Supabase anon key (public key)', current);
-      if (value === null) return;
-
-      const normalized = value.trim();
-      if (!normalized) {
-        localStorage.removeItem(SUPABASE_ANON_KEY_STORAGE_KEY);
-      } else {
-        localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, normalized);
-      }
-
-      if (!lecture) return;
-      const qrValue = buildCheckinUrl(lecture);
-      latestCheckinLink = qrValue;
-      document.getElementById('checkinLink').value = qrValue;
-      document.getElementById('qrImage').src = buildQrUrl(qrValue);
     }
 
     function buildCheckinUrl(data) {
@@ -362,8 +322,6 @@
       document.getElementById('qrImage').src = buildQrUrl(qrValue);
       if (window.location.protocol === 'file:') {
         document.getElementById('qrHint').textContent = 'For phone scanning, run with Live Server and replace YOUR-PC-IP in link.';
-      } else if (window.location.hostname.includes('github.io') && (!getApiBase() || !getSupabaseAnonKey())) {
-        document.getElementById('qrHint').textContent = 'Set API URL and Supabase Key first so student check-in can be saved.';
       } else {
         document.getElementById('qrHint').textContent = 'Students can scan this QR to open check-in page on phone.';
       }
