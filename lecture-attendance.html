@@ -408,6 +408,46 @@
       return date.toTimeString().slice(0, 8);
     }
 
+    function parseHhmmToday(value) {
+      if (!value || typeof value !== 'string' || !/^\d{2}:\d{2}$/.test(value)) return null;
+      const [hours, minutes] = value.split(':').map(Number);
+      if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+    }
+
+    function parseCheckinDate(value) {
+      if (!value || typeof value !== 'string') return null;
+
+      const direct = new Date(value);
+      if (!Number.isNaN(direct.getTime())) return direct;
+
+      const match = value.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+      if (!match) return null;
+
+      const hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      const seconds = Number(match[3] || '0');
+      if (Number.isNaN(hours) || Number.isNaN(minutes) || Number.isNaN(seconds)) return null;
+
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, seconds, 0);
+    }
+
+    function classifyStatusByTimes(checkinValue, fallbackStatus = 'absent') {
+      if (!lecture || !lecture.startTime) return fallbackStatus;
+
+      const startAt = parseHhmmToday(lecture.startTime);
+      const checkinAt = parseCheckinDate(checkinValue);
+      if (!startAt || !checkinAt) return fallbackStatus;
+
+      const diffMinutes = (checkinAt.getTime() - startAt.getTime()) / 60000;
+      if (diffMinutes <= 5) return 'present';
+      if (diffMinutes <= 15) return 'late';
+      return 'absent';
+    }
+
     function getLectureId() {
       if (lecture && lecture.id) return lecture.id;
       if (!lecture) return 'default-lecture';
@@ -433,7 +473,7 @@
                 id: row.student_id,
                 name: row.student_name,
                 time: formatDbTime(row.checkin_time),
-                status: row.status || 'absent',
+                status: classifyStatusByTimes(row.checkin_time, row.status || 'absent'),
                 note: row.note || '-'
               }));
               renderStats();
@@ -444,7 +484,11 @@
 
           const response = await fetch(`${getApiBase()}/api/attendance?lectureId=${encodeURIComponent(lectureId)}`);
           if (response.ok) {
-            students = await response.json();
+            const rows = await response.json();
+            students = rows.map((row) => ({
+              ...row,
+              status: classifyStatusByTimes(row.time, row.status || 'absent')
+            }));
             renderStats();
             renderTable();
             return;

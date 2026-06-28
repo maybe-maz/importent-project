@@ -35,6 +35,32 @@ function nowTime() {
   return new Date().toTimeString().slice(0, 8);
 }
 
+function computeAttendanceStatus(startTime, at = new Date()) {
+  if (!startTime || typeof startTime !== 'string') return 'present';
+
+  const match = startTime.match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return 'present';
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return 'present';
+
+  const startAt = new Date(
+    at.getFullYear(),
+    at.getMonth(),
+    at.getDate(),
+    hours,
+    minutes,
+    0,
+    0
+  );
+
+  const diffMinutes = (at.getTime() - startAt.getTime()) / 60000;
+  if (diffMinutes <= 5) return 'present';
+  if (diffMinutes <= 15) return 'late';
+  return 'absent';
+}
+
 async function ensureDb() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   try {
@@ -170,12 +196,13 @@ app.post('/api/checkin', async (req, res) => {
 
   const rows = db.attendance[lectureId];
   const idx = rows.findIndex((row) => row.id === studentId);
+  const status = computeAttendanceStatus(lecture.startTime);
   const updated = {
     id: studentId,
     name: studentName,
-    time: nowTime(),
-    status: 'present',
-    note: '-'
+    time: status === 'absent' ? '-' : nowTime(),
+    status,
+    note: status === 'absent' ? 'Over 15 minutes late' : '-'
   };
 
   if (idx >= 0) {
