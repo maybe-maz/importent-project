@@ -165,6 +165,7 @@
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
     const CHECKIN_LOCK_PREFIX = 'checkinLock';
+    const CHECKIN_META_PREFIX = 'checkinMeta';
     const NEXT_PAGE = 'student-checkin-next.html';
 
     document.getElementById('subject').textContent = decodeURIComponent(subject);
@@ -226,9 +227,14 @@
       return `${CHECKIN_LOCK_PREFIX}::${lectureId}`;
     }
 
-    function markCheckinDone() {
+    function getCheckinMetaKey() {
+      return `${CHECKIN_META_PREFIX}::${lectureId}`;
+    }
+
+    function markCheckinDone(studentId, studentName) {
       if (!lectureId) return;
       localStorage.setItem(getCheckinLockKey(), '1');
+      localStorage.setItem(getCheckinMetaKey(), JSON.stringify({ studentId, studentName }));
     }
 
     function hasCheckedInOnThisDevice() {
@@ -238,7 +244,16 @@
 
     function redirectIfAlreadyCheckedIn() {
       if (!hasCheckedInOnThisDevice()) return;
-      const nextUrl = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}`;
+      let studentId = '';
+      let studentName = '';
+      try {
+        const stored = JSON.parse(localStorage.getItem(getCheckinMetaKey()) || '{}');
+        studentId = stored.studentId || '';
+        studentName = stored.studentName || '';
+      } catch {
+      }
+
+      const nextUrl = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}&studentId=${encodeURIComponent(studentId)}&studentName=${encodeURIComponent(studentName)}`;
       window.location.replace(nextUrl);
     }
 
@@ -325,11 +340,11 @@
           return;
         }
 
-        markCheckinDone();
+        markCheckinDone(id, name);
         const msg = document.getElementById('successMsg');
         msg.style.display = 'block';
         setTimeout(() => {
-          window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}`;
+          window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}&studentId=${encodeURIComponent(id)}&studentName=${encodeURIComponent(name)}`;
         }, 700);
         return;
       }
@@ -353,11 +368,11 @@
         return;
       }
 
-      markCheckinDone();
+      markCheckinDone(id, name);
       const msg = document.getElementById('successMsg');
       msg.style.display = 'block';
       setTimeout(() => {
-        window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}`;
+        window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}&studentId=${encodeURIComponent(id)}&studentName=${encodeURIComponent(name)}`;
       }, 700);
     }
 

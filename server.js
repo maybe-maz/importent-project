@@ -249,6 +249,41 @@ app.post('/api/attendance/mark', async (req, res) => {
   res.json({ ok: true, record: updated });
 });
 
+app.post('/api/attendance/note', async (req, res) => {
+  const { lectureId, studentId, studentName, note } = req.body || {};
+  if (!lectureId || !studentId || !note) {
+    res.status(400).json({ message: 'Missing required fields.' });
+    return;
+  }
+
+  const db = await readDb();
+  if (!db.attendance[lectureId]) {
+    db.attendance[lectureId] = [];
+  }
+
+  const rows = db.attendance[lectureId];
+  const idx = rows.findIndex((row) => row.id === studentId);
+
+  if (idx < 0) {
+    rows.push({
+      id: studentId,
+      name: studentName || '-',
+      time: '-',
+      status: 'absent',
+      note: String(note).trim()
+    });
+  } else {
+    rows[idx] = {
+      ...rows[idx],
+      name: studentName || rows[idx].name,
+      note: String(note).trim()
+    };
+  }
+
+  await writeDb(db);
+  res.json({ ok: true });
+});
+
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'indext.html'));
 });
