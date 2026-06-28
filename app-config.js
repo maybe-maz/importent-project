@@ -5,5 +5,5 @@ window.APP_CONFIG = {
   apiBase: 'https://nwvwqmcezaymypkictil.supabase.co/rest/v1/',
 
   // Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-  supabaseAnonKey: 'sb_publishable_87gyjpenQxQwD9GGaKznjw_8mJeYmhl'
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53dndxbWNlemF5bXlwa2ljdGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NzI5MjAsImV4cCI6MjA5ODE0ODkyMH0.sv03G8WixXmy6cx4P5PZvBdbJK6yQAPLZd60C__KeEI'
 };
