@@ -284,6 +284,51 @@
       };
     }
 
+    function decodeSafe(value) {
+      try {
+        return decodeURIComponent(value || '');
+      } catch {
+        return value || '';
+      }
+    }
+
+    function toDbTime(value) {
+      const hhmm = extractHhmm(value);
+      return hhmm ? `${hhmm}:00` : null;
+    }
+
+    async function ensureSupabaseLectureExists(passwordValue) {
+      const getResponse = await fetch(`${getSupabaseRestBase()}/lectures?id=eq.${encodeURIComponent(lectureId)}&select=id`, {
+        headers: getSupabaseHeaders()
+      });
+
+      if (getResponse.ok) {
+        const rows = await getResponse.json().catch(() => []);
+        if (Array.isArray(rows) && rows.length) return true;
+      }
+
+      const payload = {
+        id: lectureId,
+        subject: decodeSafe(subject) || '-',
+        doctor: decodeSafe(doctor) || '-',
+        room_number: decodeSafe(room) || '-',
+        start_time: toDbTime(start),
+        end_time: toDbTime(end),
+        password: passwordValue || ''
+      };
+
+      const createResponse = await fetch(`${getSupabaseRestBase()}/lectures`, {
+        method: 'POST',
+        headers: {
+          ...getSupabaseHeaders(),
+          Prefer: 'return=minimal'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      return createResponse.ok;
+    }
+
     function extractHhmm(value) {
       const match = String(value || '').match(/^(\d{2}:\d{2})/);
       return match ? match[1] : '';
@@ -434,6 +479,12 @@
       }
 
       if (isSupabaseMode()) {
+        const lectureReady = await ensureSupabaseLectureExists(password || '');
+        if (!lectureReady) {
+          alert('Could not prepare lecture record in Supabase. Please ask doctor to regenerate QR.');
+          return;
+        }
+
         const response = await fetch(`${getSupabaseRestBase()}/rpc/checkin_student`, {
           method: 'POST',
           headers: getSupabaseHeaders(),
