@@ -601,18 +601,30 @@
       const lecture = lecturesCache[index];
       if (!lecture) return;
       sessionStorage.setItem('selectedLecture', JSON.stringify({ ...lecture, sessionNumber: index + 1 }));
-      const subjectQuery = encodeURIComponent(subjectText);
-      const doctorQuery = encodeURIComponent(doctorText);
-      window.location.href = `lecture-attendance.html?subject=${subjectQuery}&doctor=${doctorQuery}`;
+      const search = new URLSearchParams({
+        subject: subjectText,
+        doctor: doctorText
+      });
+      const apiBase = getApiBase();
+      const sbKey = getSupabaseAnonKey();
+      if (apiBase) search.set('apiBase', apiBase);
+      if (sbKey) search.set('sbKey', sbKey);
+      window.location.href = `lecture-attendance.html?${search.toString()}`;
     }
 
     function openLecturePage(index) {
       const lecture = lecturesCache[index];
       if (!lecture) return;
       sessionStorage.setItem('selectedLecture', JSON.stringify({ ...lecture, sessionNumber: index + 1 }));
-      const subjectQuery = encodeURIComponent(subjectText);
-      const doctorQuery = encodeURIComponent(doctorText);
-      window.location.href = `lecture-details.html?subject=${subjectQuery}&doctor=${doctorQuery}`;
+      const search = new URLSearchParams({
+        subject: subjectText,
+        doctor: doctorText
+      });
+      const apiBase = getApiBase();
+      const sbKey = getSupabaseAnonKey();
+      if (apiBase) search.set('apiBase', apiBase);
+      if (sbKey) search.set('sbKey', sbKey);
+      window.location.href = `lecture-details.html?${search.toString()}`;
     }
 
     async function deleteLecture(id) {

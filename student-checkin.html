@@ -183,7 +183,10 @@
 
     function getApiBase() {
       const fromQuery = normalizeApiBase(params.get('apiBase') || '');
-      if (fromQuery) return fromQuery;
+      if (fromQuery) {
+        localStorage.setItem(API_BASE_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
 
       const fromStorage = normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
       if (fromStorage) return fromStorage;
@@ -206,6 +209,21 @@
         return fromQuery;
       }
       return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+    }
+
+    function buildNextPageUrl(studentId, studentName) {
+      const search = new URLSearchParams({
+        lectureId,
+        studentId: studentId || '',
+        studentName: studentName || ''
+      });
+
+      const apiBase = getApiBase();
+      const sbKey = getSupabaseAnonKey();
+      if (apiBase) search.set('apiBase', apiBase);
+      if (sbKey) search.set('sbKey', sbKey);
+
+      return `${NEXT_PAGE}?${search.toString()}`;
     }
 
     function isSupabaseMode() {
@@ -292,7 +310,7 @@
       } catch {
       }
 
-      const nextUrl = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}&studentId=${encodeURIComponent(studentId)}&studentName=${encodeURIComponent(studentName)}`;
+      const nextUrl = buildNextPageUrl(studentId, studentName);
       window.location.replace(nextUrl);
     }
 
@@ -393,7 +411,7 @@
         const msg = document.getElementById('successMsg');
         msg.style.display = 'block';
         setTimeout(() => {
-          window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}&studentId=${encodeURIComponent(id)}&studentName=${encodeURIComponent(name)}`;
+          window.location.href = buildNextPageUrl(id, name);
         }, 700);
         return;
       }
@@ -421,7 +439,7 @@
       const msg = document.getElementById('successMsg');
       msg.style.display = 'block';
       setTimeout(() => {
-        window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}&studentId=${encodeURIComponent(id)}&studentName=${encodeURIComponent(name)}`;
+        window.location.href = buildNextPageUrl(id, name);
       }, 700);
     }
 

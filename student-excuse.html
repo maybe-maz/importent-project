@@ -130,6 +130,12 @@
     }
 
     function getApiBase() {
+      const fromQuery = normalizeApiBase(params.get('apiBase') || '');
+      if (fromQuery) {
+        localStorage.setItem(API_BASE_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
       return normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
     }
 
@@ -142,6 +148,12 @@
     }
 
     function getSupabaseAnonKey() {
+      const fromQuery = (params.get('sbKey') || '').trim();
+      if (fromQuery) {
+        localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
       return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
     }
 
