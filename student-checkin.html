@@ -164,6 +164,8 @@
     const end = params.get('end') || '--:--';
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
+    const CHECKIN_LOCK_PREFIX = 'checkinLock';
+    const NEXT_PAGE = 'student-checkin-next.html';
 
     document.getElementById('subject').textContent = decodeURIComponent(subject);
     document.getElementById('doctor').textContent = decodeURIComponent(doctor);
@@ -218,6 +220,26 @@
         apikey: key,
         Authorization: `Bearer ${key}`
       };
+    }
+
+    function getCheckinLockKey() {
+      return `${CHECKIN_LOCK_PREFIX}::${lectureId}`;
+    }
+
+    function markCheckinDone() {
+      if (!lectureId) return;
+      localStorage.setItem(getCheckinLockKey(), '1');
+    }
+
+    function hasCheckedInOnThisDevice() {
+      if (!lectureId) return false;
+      return localStorage.getItem(getCheckinLockKey()) === '1';
+    }
+
+    function redirectIfAlreadyCheckedIn() {
+      if (!hasCheckedInOnThisDevice()) return;
+      const nextUrl = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}`;
+      window.location.replace(nextUrl);
     }
 
     async function hydrateLectureDetails() {
@@ -303,8 +325,12 @@
           return;
         }
 
+        markCheckinDone();
         const msg = document.getElementById('successMsg');
         msg.style.display = 'block';
+        setTimeout(() => {
+          window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}`;
+        }, 700);
         return;
       }
 
@@ -327,10 +353,15 @@
         return;
       }
 
+      markCheckinDone();
       const msg = document.getElementById('successMsg');
       msg.style.display = 'block';
+      setTimeout(() => {
+        window.location.href = `${NEXT_PAGE}?lectureId=${encodeURIComponent(lectureId)}`;
+      }, 700);
     }
 
+    redirectIfAlreadyCheckedIn();
     hydrateLectureDetails();
   </script>
 </body>

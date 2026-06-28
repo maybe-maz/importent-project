@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Check-in Already Used</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+      background: #f4f8ff;
+      color: #0f172a;
+    }
+
+    .card {
+      width: min(520px, 100%);
+      background: #ffffff;
+      border: 1px solid #dbeafe;
+      border-radius: 16px;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+      padding: 22px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      color: #1d4ed8;
+    }
+
+    p {
+      margin: 8px 0;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    .btn {
+      margin-top: 14px;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      background: #2563eb;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Check-in Already Submitted</h1>
+    <p>This device already used this lecture QR and cannot submit again.</p>
+    <p id="lectureRef"></p>
+    <button class="btn" onclick="window.location.href='indext.html'">Go Home</button>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const lectureId = params.get('lectureId') || '';
+    if (lectureId) {
+      document.getElementById('lectureRef').textContent = `Lecture ID: ${lectureId}`;
+    }
+  </script>
+</body>
+</html>
