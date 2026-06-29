@@ -286,7 +286,11 @@
     async function verifyEspGate() {
       const gateBase = getEspGateUrl();
       if (!gateBase) {
-        return { ok: true, skipped: true };
+        return {
+          ok: false,
+          skipped: false,
+          message: 'ESP gate URL is missing. Contact instructor.'
+        };
       }
 
       try {
@@ -305,8 +309,9 @@
         };
       } catch {
         return {
-          ok: true,
-          skipped: true
+          ok: false,
+          skipped: false,
+          message: 'Cannot reach ESP gate. Connect to classroom beacon and retry.'
         };
       }
     }
