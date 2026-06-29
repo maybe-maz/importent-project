@@ -166,6 +166,7 @@
     const end = params.get('end') || '--:--';
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
+    const ESP_GATE_URL_STORAGE_KEY = 'attendanceEspGateUrl';
     const CHECKIN_LOCK_PREFIX = 'checkinLock';
     const CHECKIN_META_PREFIX = 'checkinMeta';
     const NEXT_PAGE = 'student-checkin-next.html';
@@ -255,6 +256,59 @@
       }
 
       return '';
+    }
+
+    function normalizeUrl(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/\/+$/, '');
+    }
+
+    function getEspGateUrl() {
+      const fromQuery = normalizeUrl(params.get('espGateUrl') || '');
+      if (fromQuery) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = normalizeUrl(localStorage.getItem(ESP_GATE_URL_STORAGE_KEY) || '');
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.espGateUrl) || '');
+      if (fromConfig) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    async function verifyEspGate() {
+      const gateBase = getEspGateUrl();
+      if (!gateBase) {
+        return { ok: true, skipped: true };
+      }
+
+      try {
+        const verifyUrl = /\/verify$/i.test(gateBase) ? gateBase : `${gateBase}/verify`;
+        const response = await fetch(verifyUrl, { method: 'GET', cache: 'no-store' });
+        const body = (await response.text().catch(() => '')).trim();
+
+        if (response.ok && /^(OK|Attendance Allowed)$/i.test(body || 'OK')) {
+          return { ok: true, skipped: false };
+        }
+
+        return {
+          ok: false,
+          skipped: false,
+          message: body || 'Too far from classroom.'
+        };
+      } catch {
+        return {
+          ok: true,
+          skipped: true
+        };
+      }
     }
 
     function buildNextPageUrl(studentId, studentName) {
@@ -380,7 +434,7 @@
     }
 
     function isRssiAllowed() {
-      if (!hasRssi) return false;
+      if (!hasRssi) return true;
       return parsedRssi >= MIN_ALLOWED_RSSI && parsedRssi <= MAX_ALLOWED_RSSI;
     }
 
@@ -388,26 +442,8 @@
       const rule = document.getElementById('rssiRule');
       const submitBtn = document.getElementById('submitBtn');
 
-      if (!hasRssi) {
-        rule.style.display = 'block';
-        rule.textContent = 'RSSI is missing. Rescan from the app to continue.';
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.6';
-        submitBtn.style.cursor = 'not-allowed';
-        return;
-      }
-
-      if (!isRssiAllowed()) {
-        rule.style.display = 'block';
-        rule.textContent = `Signal out of range (RSSI ${parsedRssi}). Allowed range is ${MIN_ALLOWED_RSSI} to ${MAX_ALLOWED_RSSI}.`;
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.6';
-        submitBtn.style.cursor = 'not-allowed';
-        return;
-      }
-
-      rule.style.display = 'block';
-      rule.textContent = `Signal accepted (RSSI ${parsedRssi}). Allowed range matched.`;
+      rule.style.display = 'none';
+      rule.textContent = '';
       submitBtn.disabled = false;
       submitBtn.style.opacity = '1';
       submitBtn.style.cursor = 'pointer';
@@ -479,11 +515,6 @@
     }
 
     async function submitCheckin() {
-      if (!isRssiAllowed()) {
-        alert(`Cannot submit check-in: RSSI must be between ${MIN_ALLOWED_RSSI} and ${MAX_ALLOWED_RSSI}.`);
-        return;
-      }
-
       const id = document.getElementById('studentId').value.trim();
       const name = document.getElementById('studentName').value.trim();
       const password = document.getElementById('password').value.trim();
@@ -519,6 +550,12 @@
 
       if (isSupabaseMode() && !isUuid(lectureId)) {
         alert('This QR uses an old lecture ID format. Ask doctor to regenerate the QR from a synced lecture.');
+        return;
+      }
+
+      const gateResult = await verifyEspGate();
+      if (!gateResult.ok) {
+        alert(gateResult.message || 'Attendance gate validation failed.');
         return;
       }
 
