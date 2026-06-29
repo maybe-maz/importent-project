@@ -219,6 +219,8 @@
     const doctor = params.get('doctor');
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
+    const GATE_API_BASE_STORAGE_KEY = 'attendanceGateApiBaseUrl';
+    const ESP_GATE_URL_STORAGE_KEY = 'attendanceEspGateUrl';
     let latestCheckinLink = '';
 
     function goBackToSubject() {
@@ -307,10 +309,57 @@
       return (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
     }
 
+    function normalizeUrl(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/\/+$/, '');
+    }
+
+    function getGateApiBase() {
+      const fromQuery = normalizeUrl(params.get('gateApiBase') || '');
+      if (fromQuery) {
+        localStorage.setItem(GATE_API_BASE_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = normalizeUrl(localStorage.getItem(GATE_API_BASE_STORAGE_KEY) || '');
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.gateApiBase) || '');
+      if (fromConfig) {
+        localStorage.setItem(GATE_API_BASE_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    function getEspGateUrl() {
+      const fromQuery = normalizeUrl(params.get('espGateUrl') || '');
+      if (fromQuery) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = normalizeUrl(localStorage.getItem(ESP_GATE_URL_STORAGE_KEY) || '');
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.espGateUrl) || '');
+      if (fromConfig) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
     function buildCheckinUrl(data) {
       const baseUrl = getBaseUrl();
       const apiBase = getApiBase();
       const supabaseKey = getSupabaseAnonKey();
+      const gateApiBase = getGateApiBase();
+      const espGateUrl = getEspGateUrl();
+      const gateRequired = !!(window.APP_CONFIG && window.APP_CONFIG.gateRequired);
       const search = new URLSearchParams({
         lectureId: data.id || '',
         subject: subject || '',
@@ -326,6 +375,18 @@
 
       if (supabaseKey) {
         search.set('sbKey', supabaseKey);
+      }
+
+      if (gateApiBase) {
+        search.set('gateApiBase', gateApiBase);
+      }
+
+      if (espGateUrl) {
+        search.set('espGateUrl', espGateUrl);
+      }
+
+      if (gateRequired) {
+        search.set('gateRequired', '1');
       }
 
       return `${baseUrl}/student-checkin.html?${search.toString()}`;

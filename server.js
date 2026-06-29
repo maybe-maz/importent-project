@@ -1,11 +1,15 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs/promises');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const GATE_SECRET = process.env.ESP_GATE_SECRET || 'CHANGE_ME_GATE_SECRET';
+const GATE_NONCE_RETENTION_MS = Number(process.env.GATE_NONCE_RETENTION_MS || 3600000);
+const usedGateNonces = new Map();
 
 const DEFAULT_ROSTER = [
   { id: '241100150', name: 'Yahya Shujaa', time: '-', status: 'absent', note: '-' },
@@ -84,8 +88,102 @@ function buildLectureId() {
   return `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
+function cleanupUsedGateNonces(now = Date.now()) {
+  for (const [nonce, expiresAt] of usedGateNonces.entries()) {
+    if (expiresAt <= now) {
+      usedGateNonces.delete(nonce);
+    }
+  }
+}
+
+function parseGateToken(token) {
+  const raw = String(token || '').trim();
+  if (!raw) return null;
+
+  const parts = raw.split('.');
+  if (parts.length < 5) return null;
+
+  const signatureHex = parts.pop();
+  const rssiRaw = parts.pop();
+  const nonce = parts.pop();
+  const tsRaw = parts.pop();
+  const lectureId = parts.join('.');
+
+  const issuedAtMs = Number(tsRaw);
+  const rssi = Number(rssiRaw);
+  if (!lectureId || !nonce || Number.isNaN(issuedAtMs) || Number.isNaN(rssi) || !signatureHex) {
+    return null;
+  }
+
+  return {
+    lectureId,
+    nonce,
+    issuedAtMs,
+    rssi,
+    signatureHex,
+    payload: `${lectureId}.${issuedAtMs}.${nonce}.${rssi}`
+  };
+}
+
+function verifyGateToken(token, expectedLectureId) {
+  const parsed = parseGateToken(token);
+  if (!parsed) {
+    return { ok: false, message: 'Invalid gate token format.' };
+  }
+
+  if (String(expectedLectureId || '').trim() !== parsed.lectureId) {
+    return { ok: false, message: 'Gate token lecture mismatch.' };
+  }
+
+  const now = Date.now();
+  cleanupUsedGateNonces(now);
+
+  const expectedSigHex = crypto
+    .createHmac('sha256', GATE_SECRET)
+    .update(parsed.payload)
+    .digest('hex');
+
+  const providedSig = Buffer.from(parsed.signatureHex, 'hex');
+  const expectedSig = Buffer.from(expectedSigHex, 'hex');
+  if (providedSig.length !== expectedSig.length || !crypto.timingSafeEqual(providedSig, expectedSig)) {
+    return { ok: false, message: 'Gate token signature is invalid.' };
+  }
+
+  if (usedGateNonces.has(parsed.nonce)) {
+    return { ok: false, message: 'Gate token already used. Re-verify near classroom beacon.' };
+  }
+
+  return { ok: true, parsed };
+}
+
+function consumeGateNonce(nonce) {
+  const expiresAt = Date.now() + GATE_NONCE_RETENTION_MS;
+  usedGateNonces.set(nonce, expiresAt);
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+app.post('/api/gate/validate', (req, res) => {
+  const { lectureId, gateToken } = req.body || {};
+  if (!lectureId || !gateToken) {
+    res.status(400).json({ ok: false, message: 'lectureId and gateToken are required.' });
+    return;
+  }
+
+  const verified = verifyGateToken(gateToken, lectureId);
+  if (!verified.ok) {
+    res.status(401).json({ ok: false, message: verified.message || 'Gate validation failed.' });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    lectureId: verified.parsed.lectureId,
+    rssi: verified.parsed.rssi,
+    issuedAtMs: verified.parsed.issuedAtMs
+  });
 });
 
 app.get('/api/lectures', async (req, res) => {
@@ -173,11 +271,18 @@ app.get('/api/attendance', async (req, res) => {
 });
 
 app.post('/api/checkin', async (req, res) => {
-  const { lectureId, studentId, studentName, password } = req.body || {};
+  const { lectureId, studentId, studentName, password, gateToken } = req.body || {};
   if (!lectureId || !studentId || !studentName) {
     res.status(400).json({ message: 'Missing required fields.' });
     return;
   }
+
+  const verifiedGate = verifyGateToken(gateToken, lectureId);
+  if (!verifiedGate.ok) {
+    res.status(401).json({ message: verifiedGate.message || 'Gate validation failed.' });
+    return;
+  }
+  consumeGateNonce(verifiedGate.parsed.nonce);
 
   const db = await readDb();
   const lecture = db.lectures.find((l) => l.id === lectureId);

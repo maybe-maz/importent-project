@@ -1,9 +1,11 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include "esp_wifi.h"
+#include "mbedtls/md.h"
 
 const char* AP_SSID = "LECTURE_BEACON";
 const char* AP_PASS = "12345678";
+const char* GATE_SECRET = "CHANGE_ME_GATE_SECRET";
 
 WebServer server(80);
 
@@ -47,6 +49,79 @@ void handleVerify() {
   }
 }
 
+String hmacSha256Hex(const String& payload, const String& key) {
+  unsigned char output[32];
+  const mbedtls_md_info_t* mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  if (!mdInfo) return "";
+
+  int result = mbedtls_md_hmac(
+    mdInfo,
+    reinterpret_cast<const unsigned char*>(key.c_str()),
+    key.length(),
+    reinterpret_cast<const unsigned char*>(payload.c_str()),
+    payload.length(),
+    output
+  );
+  if (result != 0) return "";
+
+  const char* hex = "0123456789abcdef";
+  String out;
+  out.reserve(64);
+  for (int i = 0; i < 32; i++) {
+    out += hex[(output[i] >> 4) & 0x0F];
+    out += hex[output[i] & 0x0F];
+  }
+  return out;
+}
+
+String buildNonce() {
+  uint32_t a = esp_random();
+  uint32_t b = esp_random();
+  char buf[17];
+  snprintf(buf, sizeof(buf), "%08lx%08lx", static_cast<unsigned long>(a), static_cast<unsigned long>(b));
+  return String(buf);
+}
+
+int getPrimaryRssi() {
+  wifi_sta_list_t wifi_sta_list;
+  memset(&wifi_sta_list, 0, sizeof(wifi_sta_list));
+  esp_wifi_ap_get_sta_list(&wifi_sta_list);
+  if (wifi_sta_list.num == 0) return -999;
+  return wifi_sta_list.sta[0].rssi;
+}
+
+void handleClaim() {
+  const String lectureId = server.arg("lectureId");
+  const String redirect = server.arg("redirect");
+  if (lectureId.length() == 0 || redirect.length() == 0) {
+    sendCorsText(400, "lectureId and redirect are required");
+    return;
+  }
+
+  const int rssi = getPrimaryRssi();
+  if (rssi < RSSI_MIN || rssi > RSSI_MAX) {
+    sendCorsText(403, "Too far");
+    return;
+  }
+
+  const unsigned long issuedAtMs = millis();
+  const String nonce = buildNonce();
+  const String payload = lectureId + "." + String(issuedAtMs) + "." + nonce + "." + String(rssi);
+  const String signature = hmacSha256Hex(payload, String(GATE_SECRET));
+  if (signature.length() == 0) {
+    sendCorsText(500, "Token signing failed");
+    return;
+  }
+
+  const String gateToken = payload + "." + signature;
+  String target = redirect;
+  target += (target.indexOf('?') >= 0) ? "&" : "?";
+  target += "gateToken=" + gateToken;
+
+  server.sendHeader("Location", target, true);
+  server.send(302, "text/plain", "Redirecting...");
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -58,6 +133,7 @@ void setup() {
 
   server.on("/verify", HTTP_GET, handleVerify);
   server.on("/verify", HTTP_OPTIONS, handleOptions);
+  server.on("/claim", HTTP_GET, handleClaim);
   server.onNotFound(handleVerify);
   server.begin();
 }

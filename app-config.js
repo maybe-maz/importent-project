@@ -7,6 +7,12 @@ window.APP_CONFIG = {
   // Example: http://192.168.4.1 (ESP gate endpoint). Leave empty to disable ESP gate check.
   espGateUrl: 'http://192.168.4.1',
 
+  // Example: https://YOUR_SERVER_HOST (must host /api/gate/validate)
+  gateApiBase: 'http://localhost:8000',
+
+  // When true, check-in is blocked unless a valid gate token is present.
+  gateRequired: true,
+
   // Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53dndxbWNlemF5bXlwa2ljdGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NzI5MjAsImV4cCI6MjA5ODE0ODkyMH0.sv03G8WixXmy6cx4P5PZvBdbJK6yQAPLZd60C__KeEI'
 };

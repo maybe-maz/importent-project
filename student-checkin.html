@@ -166,6 +166,7 @@
     const end = params.get('end') || '--:--';
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
+    const GATE_API_BASE_STORAGE_KEY = 'attendanceGateApiBaseUrl';
     const ESP_GATE_URL_STORAGE_KEY = 'attendanceEspGateUrl';
     const CHECKIN_LOCK_PREFIX = 'checkinLock';
     const CHECKIN_META_PREFIX = 'checkinMeta';
@@ -174,6 +175,7 @@
     const MAX_ALLOWED_RSSI = -10;
     const parsedRssi = Number(params.get('rssi'));
     const hasRssi = Number.isFinite(parsedRssi);
+    const gateToken = String(params.get('gateToken') || '').trim();
     let lectureStartTime = decodeURIComponent(start);
     let passwordUiTimerId = null;
 
@@ -264,6 +266,55 @@
       return trimmed.replace(/\/+$/, '');
     }
 
+    function getGateRequired() {
+      const fromQuery = String(params.get('gateRequired') || '').trim().toLowerCase();
+      if (fromQuery === '1' || fromQuery === 'true') return true;
+      if (fromQuery === '0' || fromQuery === 'false') return false;
+      return !!(window.APP_CONFIG && window.APP_CONFIG.gateRequired);
+    }
+
+    function getGateApiBase() {
+      const fromQuery = normalizeUrl(params.get('gateApiBase') || '');
+      if (fromQuery) {
+        localStorage.setItem(GATE_API_BASE_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = normalizeUrl(localStorage.getItem(GATE_API_BASE_STORAGE_KEY) || '');
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.gateApiBase) || '');
+      if (fromConfig) {
+        localStorage.setItem(GATE_API_BASE_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    function stripGateTokenFromCurrentUrl() {
+      try {
+        const current = new URL(window.location.href);
+        current.searchParams.delete('gateToken');
+        return current.toString();
+      } catch {
+        return window.location.href;
+      }
+    }
+
+    function buildEspClaimUrl() {
+      const gateBase = getEspGateUrl();
+      if (!gateBase) return '';
+
+      const claimBase = /\/claim$/i.test(gateBase) ? gateBase : `${gateBase}/claim`;
+      const search = new URLSearchParams({
+        lectureId,
+        redirect: stripGateTokenFromCurrentUrl()
+      });
+
+      return `${claimBase}?${search.toString()}`;
+    }
+
     function getEspGateUrl() {
       const fromQuery = normalizeUrl(params.get('espGateUrl') || '');
       if (fromQuery) {
@@ -284,34 +335,63 @@
     }
 
     async function verifyEspGate() {
-      const gateBase = getEspGateUrl();
-      if (!gateBase) {
-        return {
-          ok: false,
-          skipped: false,
-          message: 'ESP gate URL is missing. Contact instructor.'
-        };
+      if (!getGateRequired()) {
+        return { ok: true, skipped: true };
       }
 
-      try {
-        const verifyUrl = /\/verify$/i.test(gateBase) ? gateBase : `${gateBase}/verify`;
-        const response = await fetch(verifyUrl, { method: 'GET', cache: 'no-store' });
-        const body = (await response.text().catch(() => '')).trim();
-
-        if (response.ok && /^(OK|Attendance Allowed)$/i.test(body || 'OK')) {
-          return { ok: true, skipped: false };
+      if (!gateToken) {
+        const claimUrl = buildEspClaimUrl();
+        if (claimUrl) {
+          return {
+            ok: false,
+            skipped: false,
+            message: `Classroom verification is required. Connect to classroom beacon and open: ${claimUrl}`
+          };
         }
 
         return {
           ok: false,
           skipped: false,
-          message: body || 'Too far from classroom.'
+          message: 'Classroom verification is required but ESP gate URL is missing.'
+        };
+      }
+
+      const gateApiBase = getGateApiBase();
+      if (!gateApiBase) {
+        return {
+          ok: false,
+          skipped: false,
+          message: 'Gate API URL is missing. Contact instructor.'
+        };
+      }
+
+      try {
+        const response = await fetch(`${gateApiBase}/api/gate/validate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            lectureId,
+            gateToken
+          })
+        });
+
+        if (response.ok) {
+          return { ok: true, skipped: false };
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        return {
+          ok: false,
+          skipped: false,
+          message: payload.message || 'Classroom verification failed.'
         };
       } catch {
         return {
           ok: false,
           skipped: false,
-          message: 'Cannot reach ESP gate. Connect to classroom beacon and retry.'
+          message: 'Cannot reach Gate API server. Retry in classroom network.'
         };
       }
     }
@@ -447,8 +527,16 @@
       const rule = document.getElementById('rssiRule');
       const submitBtn = document.getElementById('submitBtn');
 
-      rule.style.display = 'none';
-      rule.textContent = '';
+      if (getGateRequired() && !gateToken) {
+        const claimUrl = buildEspClaimUrl();
+        rule.style.display = 'block';
+        rule.textContent = claimUrl
+          ? `Classroom verification required. Connect to beacon then open: ${claimUrl}`
+          : 'Classroom verification required. ESP gate link is missing.';
+      } else {
+        rule.style.display = 'none';
+        rule.textContent = '';
+      }
       submitBtn.disabled = false;
       submitBtn.style.opacity = '1';
       submitBtn.style.cursor = 'pointer';
@@ -606,7 +694,8 @@
           lectureId,
           studentId: id,
           studentName: name,
-          password: password || null
+          password: password || null,
+          gateToken: gateToken || null
         })
       });
 
