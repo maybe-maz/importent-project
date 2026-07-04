@@ -182,6 +182,7 @@
     const CHECKIN_LOCK_PREFIX = 'checkinLock';
     const CHECKIN_META_PREFIX = 'checkinMeta';
     const NEXT_PAGE = 'student-checkin-next.html';
+    const qrToken = String(params.get('qrToken') || '').trim();
     const incomingGateToken = String(params.get('gateToken') || '').trim();
     let resolvedGateToken = incomingGateToken;
     let bluetoothGateVerified = !!incomingGateToken;
@@ -859,6 +860,11 @@
         return;
       }
 
+      if (!qrToken) {
+        alert('QR security token is missing. Ask doctor to regenerate QR.');
+        return;
+      }
+
       const apiBase = getApiBase();
       const sbKey = getSupabaseAnonKey();
 
@@ -926,7 +932,8 @@
           studentId: id,
           studentName: name,
           password: password || null,
-          gateToken: resolvedGateToken || null
+          gateToken: resolvedGateToken || null,
+          qrToken: qrToken || null
         })
       });
 

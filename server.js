@@ -8,7 +8,9 @@ const PORT = process.env.PORT || 8000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const GATE_SECRET = process.env.ESP_GATE_SECRET || 'CHANGE_ME_GATE_SECRET';
+const QR_SECRET = process.env.QR_TOKEN_SECRET || 'CHANGE_ME_QR_SECRET';
 const GATE_NONCE_RETENTION_MS = Number(process.env.GATE_NONCE_RETENTION_MS || 3600000);
+const QR_TOKEN_TTL_MS = Number(process.env.QR_TOKEN_TTL_MS || 7200000);
 const usedGateNonces = new Map();
 
 const DEFAULT_ROSTER = [
@@ -161,8 +163,104 @@ function consumeGateNonce(nonce) {
   usedGateNonces.set(nonce, expiresAt);
 }
 
+function createQrToken(lectureId, ttlMs = QR_TOKEN_TTL_MS) {
+  const safeLectureId = String(lectureId || '').trim();
+  if (!safeLectureId) return '';
+
+  const now = Date.now();
+  const nonce = crypto.randomBytes(8).toString('hex');
+  const expiresAtMs = now + Math.max(300000, Number(ttlMs) || QR_TOKEN_TTL_MS);
+  const payload = `${safeLectureId}.${now}.${expiresAtMs}.${nonce}`;
+  const signatureHex = crypto
+    .createHmac('sha256', QR_SECRET)
+    .update(payload)
+    .digest('hex');
+
+  return `${payload}.${signatureHex}`;
+}
+
+function parseQrToken(token) {
+  const raw = String(token || '').trim();
+  if (!raw) return null;
+
+  const parts = raw.split('.');
+  if (parts.length < 5) return null;
+
+  const signatureHex = parts.pop();
+  const nonce = parts.pop();
+  const expiresAtRaw = parts.pop();
+  const issuedAtRaw = parts.pop();
+  const lectureId = parts.join('.');
+
+  const issuedAtMs = Number(issuedAtRaw);
+  const expiresAtMs = Number(expiresAtRaw);
+  if (!lectureId || !nonce || Number.isNaN(issuedAtMs) || Number.isNaN(expiresAtMs) || !signatureHex) {
+    return null;
+  }
+
+  const payload = `${lectureId}.${issuedAtMs}.${expiresAtMs}.${nonce}`;
+  return {
+    lectureId,
+    issuedAtMs,
+    expiresAtMs,
+    nonce,
+    signatureHex,
+    payload
+  };
+}
+
+function verifyQrToken(token, expectedLectureId) {
+  const parsed = parseQrToken(token);
+  if (!parsed) {
+    return { ok: false, message: 'Invalid QR token format.' };
+  }
+
+  if (String(expectedLectureId || '').trim() !== parsed.lectureId) {
+    return { ok: false, message: 'QR token lecture mismatch.' };
+  }
+
+  if (Date.now() > parsed.expiresAtMs) {
+    return { ok: false, message: 'QR token expired. Ask doctor to refresh QR.' };
+  }
+
+  const expectedSigHex = crypto
+    .createHmac('sha256', QR_SECRET)
+    .update(parsed.payload)
+    .digest('hex');
+
+  const providedSig = Buffer.from(parsed.signatureHex, 'hex');
+  const expectedSig = Buffer.from(expectedSigHex, 'hex');
+  if (providedSig.length !== expectedSig.length || !crypto.timingSafeEqual(providedSig, expectedSig)) {
+    return { ok: false, message: 'QR token signature is invalid.' };
+  }
+
+  return { ok: true, parsed };
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+app.post('/api/qr/issue', (req, res) => {
+  const { lectureId, ttlMs } = req.body || {};
+  if (!lectureId) {
+    res.status(400).json({ ok: false, message: 'lectureId is required.' });
+    return;
+  }
+
+  const token = createQrToken(lectureId, ttlMs);
+  if (!token) {
+    res.status(500).json({ ok: false, message: 'Failed to create QR token.' });
+    return;
+  }
+
+  const parsed = parseQrToken(token);
+  res.json({
+    ok: true,
+    lectureId: String(lectureId).trim(),
+    qrToken: token,
+    expiresAtMs: parsed ? parsed.expiresAtMs : null
+  });
 });
 
 app.post('/api/gate/validate', (req, res) => {
@@ -271,9 +369,15 @@ app.get('/api/attendance', async (req, res) => {
 });
 
 app.post('/api/checkin', async (req, res) => {
-  const { lectureId, studentId, studentName, password, gateToken } = req.body || {};
+  const { lectureId, studentId, studentName, password, gateToken, qrToken } = req.body || {};
   if (!lectureId || !studentId || !studentName) {
     res.status(400).json({ message: 'Missing required fields.' });
+    return;
+  }
+
+  const verifiedQr = verifyQrToken(qrToken, lectureId);
+  if (!verifiedQr.ok) {
+    res.status(401).json({ message: verifiedQr.message || 'QR validation failed.' });
     return;
   }
 

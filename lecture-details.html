@@ -433,7 +433,28 @@
       return '';
     }
 
-    function buildCheckinUrl(data) {
+    async function issueQrToken(lectureId) {
+      const gateApiBase = getGateApiBase();
+      if (!gateApiBase || !lectureId) return '';
+
+      try {
+        const response = await fetch(`${gateApiBase}/api/qr/issue`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ lectureId })
+        });
+
+        if (!response.ok) return '';
+        const payload = await response.json().catch(() => ({}));
+        return String(payload.qrToken || '').trim();
+      } catch {
+        return '';
+      }
+    }
+
+    async function buildCheckinUrl(data) {
       const baseUrl = getBaseUrl();
       const apiBase = getApiBase();
       const supabaseKey = getSupabaseAnonKey();
@@ -443,6 +464,7 @@
       const bleServiceUuid = getBleServiceUuid();
       const bleLectureIdCharUuid = getBleLectureIdCharUuid();
       const bleTokenCharUuid = getBleTokenCharUuid();
+      const qrToken = await issueQrToken(data.id || '');
       const gateRequired = !!(window.APP_CONFIG && window.APP_CONFIG.gateRequired);
       const search = new URLSearchParams({
         lectureId: data.id || '',
@@ -489,6 +511,10 @@
         search.set('gateRequired', '1');
       }
 
+      if (qrToken) {
+        search.set('qrToken', qrToken);
+      }
+
       return `${baseUrl}/student-checkin.html?${search.toString()}`;
     }
 
@@ -523,27 +549,39 @@
       document.body.removeChild(link);
     }
 
-    if (lecture) {
+    async function renderLectureQr() {
+      if (!lecture) {
+        const qrHint = document.getElementById('qrHint');
+        const qrImage = document.getElementById('qrImage');
+        if (qrHint) qrHint.textContent = 'No lecture selected yet.';
+        if (qrImage) qrImage.alt = 'No lecture data';
+        return;
+      }
+
       document.getElementById('roomNumber').textContent = lecture.roomNumber || '-';
       document.getElementById('startTime').textContent = lecture.startTime || '-';
       document.getElementById('endTime').textContent = lecture.endTime || '-';
       document.getElementById('password').textContent = lecture.password || '-';
 
-      const qrValue = buildCheckinUrl(lecture);
+      const qrValue = await buildCheckinUrl(lecture);
       latestCheckinLink = qrValue;
       document.getElementById('checkinLink').value = qrValue;
       document.getElementById('qrImage').src = buildQrUrl(qrValue);
+
+      const parsedLink = new URL(qrValue);
+      if (!parsedLink.searchParams.get('qrToken')) {
+        document.getElementById('qrHint').textContent = 'Warning: QR security token is missing. Ensure Gate API server is running.';
+        return;
+      }
+
       if (window.location.protocol === 'file:') {
         document.getElementById('qrHint').textContent = 'For phone scanning, run with Live Server and replace YOUR-PC-IP in link.';
       } else {
         document.getElementById('qrHint').textContent = 'Students can scan this QR to open check-in page on phone.';
       }
-    } else {
-      const qrHint = document.getElementById('qrHint');
-      const qrImage = document.getElementById('qrImage');
-      if (qrHint) qrHint.textContent = 'No lecture selected yet.';
-      if (qrImage) qrImage.alt = 'No lecture data';
     }
+
+    renderLectureQr();
   </script>
 </body>
 </html>
