@@ -1,9 +1,13 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
+#include <WiFi.h>
+#include <WebServer.h>
 #include "mbedtls/md.h"
 
 const char* BLE_DEVICE_NAME = "LECTURE_BEACON";
+const char* AP_SSID = "LECTURE_BEACON";
+const char* AP_PASS = "12345678";
 const char* GATE_SECRET = "CHANGE_ME_GATE_SECRET";
 
 const char* BLE_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
@@ -12,6 +16,7 @@ const char* BLE_TOKEN_CHAR_UUID = "0f3f2e60-8e92-4ea7-9f93-8b4b31c0d9aa";
 
 BLECharacteristic* lectureIdCharacteristic = nullptr;
 BLECharacteristic* tokenCharacteristic = nullptr;
+WebServer webServer(80);
 String lastLectureId;
 String lastIssuedToken;
 
@@ -61,9 +66,31 @@ String buildGateToken(const String& lectureId) {
   return payload + "." + signature;
 }
 
+void handleClaim() {
+  const String lectureId = webServer.arg("lectureId");
+  const String redirect = webServer.arg("redirect");
+  if (lectureId.length() == 0 || redirect.length() == 0) {
+    webServer.send(400, "text/plain", "lectureId and redirect are required");
+    return;
+  }
+
+  const String gateToken = buildGateToken(lectureId);
+  if (gateToken.length() == 0) {
+    webServer.send(500, "text/plain", "Token signing failed");
+    return;
+  }
+
+  String target = redirect;
+  target += (target.indexOf('?') >= 0) ? "&" : "?";
+  target += "gateToken=" + gateToken;
+
+  webServer.sendHeader("Location", target, true);
+  webServer.send(302, "text/plain", "Redirecting...");
+}
+
 class LectureIdCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* characteristic) override {
-    std::string value = characteristic->getValue();
+    auto value = characteristic->getValue();
     lastLectureId = String(value.c_str());
     lastLectureId.trim();
 
@@ -93,6 +120,14 @@ class TokenCallbacks : public BLECharacteristicCallbacks {
 void setup() {
   Serial.begin(115200);
 
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(AP_SSID, AP_PASS);
+  webServer.on("/claim", HTTP_GET, handleClaim);
+  webServer.begin();
+
+  Serial.print("AP IP: ");
+  Serial.println(WiFi.softAPIP());
+
   BLEDevice::init(BLE_DEVICE_NAME);
   BLEServer* server = BLEDevice::createServer();
   BLEService* service = server->createService(BLE_SERVICE_UUID);
@@ -121,5 +156,6 @@ void setup() {
 }
 
 void loop() {
+  webServer.handleClient();
   delay(100);
 }

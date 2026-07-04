@@ -4,8 +4,11 @@ window.APP_CONFIG = {
   // Example: https://YOUR_PROJECT_REF.supabase.co
   apiBase: 'https://nwvwqmcezaymypkictil.supabase.co/rest/v1/',
 
-  // Gate mode: bluetooth | token
-  gateMode: 'bluetooth',
+  // Gate mode: hybrid | bluetooth | token
+  gateMode: 'hybrid',
+
+  // iOS fallback gate endpoint (ESP32 AP HTTP claim).
+  espGateUrl: 'http://192.168.4.1',
 
   // BLE GATT service and characteristics exposed by ESP32 beacon.
   bleServiceUuid: '4fafc201-1fb5-459e-8fcc-c5c9c331914b',

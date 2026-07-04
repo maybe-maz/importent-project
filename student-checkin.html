@@ -175,6 +175,7 @@
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
     const GATE_API_BASE_STORAGE_KEY = 'attendanceGateApiBaseUrl';
     const GATE_MODE_STORAGE_KEY = 'attendanceGateMode';
+    const ESP_GATE_URL_STORAGE_KEY = 'attendanceEspGateUrl';
     const BLE_SERVICE_UUID_STORAGE_KEY = 'attendanceBleServiceUuid';
     const BLE_LECTURE_CHAR_UUID_STORAGE_KEY = 'attendanceBleLectureCharUuid';
     const BLE_TOKEN_CHAR_UUID_STORAGE_KEY = 'attendanceBleTokenCharUuid';
@@ -284,21 +285,67 @@
 
     function getGateMode() {
       const fromQuery = String(params.get('gateMode') || '').trim().toLowerCase();
-      if (fromQuery === 'bluetooth' || fromQuery === 'token') {
+      if (fromQuery === 'hybrid' || fromQuery === 'bluetooth' || fromQuery === 'token') {
         localStorage.setItem(GATE_MODE_STORAGE_KEY, fromQuery);
         return fromQuery;
       }
 
       const fromStorage = String(localStorage.getItem(GATE_MODE_STORAGE_KEY) || '').trim().toLowerCase();
-      if (fromStorage === 'bluetooth' || fromStorage === 'token') return fromStorage;
+      if (fromStorage === 'hybrid' || fromStorage === 'bluetooth' || fromStorage === 'token') return fromStorage;
 
       const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.gateMode) || '').trim().toLowerCase();
-      if (fromConfig === 'bluetooth' || fromConfig === 'token') {
+      if (fromConfig === 'hybrid' || fromConfig === 'bluetooth' || fromConfig === 'token') {
         localStorage.setItem(GATE_MODE_STORAGE_KEY, fromConfig);
         return fromConfig;
       }
 
-      return 'bluetooth';
+      return 'hybrid';
+    }
+
+    function getEspGateUrl() {
+      const fromQuery = normalizeUrl(params.get('espGateUrl') || '');
+      if (fromQuery) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = normalizeUrl(localStorage.getItem(ESP_GATE_URL_STORAGE_KEY) || '');
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.espGateUrl) || '');
+      if (fromConfig) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    function stripGateTokenFromCurrentUrl() {
+      try {
+        const current = new URL(window.location.href);
+        current.searchParams.delete('gateToken');
+        return current.toString();
+      } catch {
+        return window.location.href;
+      }
+    }
+
+    function buildEspClaimUrl() {
+      const gateBase = getEspGateUrl();
+      if (!gateBase) return '';
+
+      const claimBase = /\/claim$/i.test(gateBase) ? gateBase : `${gateBase}/claim`;
+      const search = new URLSearchParams({
+        lectureId,
+        redirect: stripGateTokenFromCurrentUrl()
+      });
+
+      return `${claimBase}?${search.toString()}`;
+    }
+
+    function isBluetoothSupported() {
+      return !!navigator.bluetooth;
     }
 
     function getGateApiBase() {
@@ -479,6 +526,17 @@
 
     async function verifyGateByBluetooth() {
       if (gateVerifyInProgress) return { ok: false, message: 'Bluetooth verification is already in progress.' };
+
+      if (!isBluetoothSupported()) {
+        const claimUrl = buildEspClaimUrl();
+        if (claimUrl) {
+          window.location.href = claimUrl;
+          return { ok: false, redirected: true, message: 'Redirecting to iOS fallback verification...' };
+        }
+        updateGateStatusUi('Bluetooth is not supported, and ESP fallback URL is missing.', false);
+        return { ok: false, message: 'Bluetooth is not supported on this browser/device.' };
+      }
+
       gateVerifyInProgress = true;
 
       const verifyBtn = document.getElementById('verifyGateBtn');
@@ -516,10 +574,34 @@
       }
 
       const mode = getGateMode();
-      if (mode !== 'bluetooth') {
+      if (mode === 'token') {
         if (!resolvedGateToken) {
           return { ok: false, message: 'Classroom verification token is missing.' };
         }
+        return verifyGateTokenWithApi(resolvedGateToken);
+      }
+
+      if (mode === 'hybrid') {
+        if (isBluetoothSupported()) {
+          if (!bluetoothGateVerified) {
+            return {
+              ok: false,
+              message: 'Classroom verification is required. Tap "Verify Classroom via Bluetooth" first.'
+            };
+          }
+          return { ok: true };
+        }
+
+        if (!resolvedGateToken) {
+          const claimUrl = buildEspClaimUrl();
+          return {
+            ok: false,
+            message: claimUrl
+              ? `Bluetooth is not supported. Complete verification from this link first: ${claimUrl}`
+              : 'Bluetooth is not supported and fallback verification link is missing.'
+          };
+        }
+
         return verifyGateTokenWithApi(resolvedGateToken);
       }
 
@@ -659,11 +741,28 @@
       const rule = document.getElementById('rssiRule');
       const submitBtn = document.getElementById('submitBtn');
       const verifyBtn = document.getElementById('verifyGateBtn');
+      const mode = getGateMode();
+      const btSupported = isBluetoothSupported();
 
-      if (getGateRequired() && getGateMode() === 'bluetooth' && !bluetoothGateVerified) {
+      if (verifyBtn) {
+        verifyBtn.textContent = btSupported ? 'Verify Classroom via Bluetooth' : 'Verify Classroom (iOS Fallback)';
+      }
+
+      if (getGateRequired() && mode === 'bluetooth' && !bluetoothGateVerified) {
         rule.style.display = 'block';
         rule.textContent = 'Classroom verification required. Use Bluetooth button before submitting.';
         if (verifyBtn) verifyBtn.style.display = 'block';
+      } else if (getGateRequired() && mode === 'hybrid' && !btSupported && !resolvedGateToken) {
+        const claimUrl = buildEspClaimUrl();
+        rule.style.display = 'block';
+        rule.textContent = claimUrl
+          ? `iOS fallback required. Tap verify, or open: ${claimUrl}`
+          : 'iOS fallback required but ESP gate URL is missing.';
+        if (verifyBtn) verifyBtn.style.display = 'block';
+      } else if (getGateRequired() && mode === 'token' && !resolvedGateToken) {
+        rule.style.display = 'block';
+        rule.textContent = 'Verification token is missing from this link.';
+        if (verifyBtn) verifyBtn.style.display = 'none';
       } else {
         rule.style.display = 'none';
         rule.textContent = '';
