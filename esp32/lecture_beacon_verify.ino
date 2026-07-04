@@ -1,53 +1,19 @@
-#include <WiFi.h>
-#include <WebServer.h>
-#include "esp_wifi.h"
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
 #include "mbedtls/md.h"
 
-const char* AP_SSID = "LECTURE_BEACON";
-const char* AP_PASS = "12345678";
+const char* BLE_DEVICE_NAME = "LECTURE_BEACON";
 const char* GATE_SECRET = "CHANGE_ME_GATE_SECRET";
 
-WebServer server(80);
+const char* BLE_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const char* BLE_LECTURE_CHAR_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+const char* BLE_TOKEN_CHAR_UUID = "0f3f2e60-8e92-4ea7-9f93-8b4b31c0d9aa";
 
-const int RSSI_MIN = -70;
-const int RSSI_MAX = -10;
-
-void sendCorsText(int statusCode, const char* body) {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-  server.send(statusCode, "text/plain", body);
-}
-
-void handleOptions() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-  server.send(204, "text/plain", "");
-}
-
-void handleVerify() {
-  wifi_sta_list_t wifi_sta_list;
-  memset(&wifi_sta_list, 0, sizeof(wifi_sta_list));
-
-  esp_wifi_ap_get_sta_list(&wifi_sta_list);
-
-  if (wifi_sta_list.num == 0) {
-    sendCorsText(403, "No client connected");
-    return;
-  }
-
-  // This uses the first connected station as the currently verifying student.
-  int rssi = wifi_sta_list.sta[0].rssi;
-  Serial.print("RSSI = ");
-  Serial.println(rssi);
-
-  if (rssi >= RSSI_MIN && rssi <= RSSI_MAX) {
-    sendCorsText(200, "OK");
-  } else {
-    sendCorsText(403, "Too far");
-  }
-}
+BLECharacteristic* lectureIdCharacteristic = nullptr;
+BLECharacteristic* tokenCharacteristic = nullptr;
+String lastLectureId;
+String lastIssuedToken;
 
 String hmacSha256Hex(const String& payload, const String& key) {
   unsigned char output[32];
@@ -82,62 +48,78 @@ String buildNonce() {
   return String(buf);
 }
 
-int getPrimaryRssi() {
-  wifi_sta_list_t wifi_sta_list;
-  memset(&wifi_sta_list, 0, sizeof(wifi_sta_list));
-  esp_wifi_ap_get_sta_list(&wifi_sta_list);
-  if (wifi_sta_list.num == 0) return -999;
-  return wifi_sta_list.sta[0].rssi;
-}
+String buildGateToken(const String& lectureId) {
+  if (lectureId.length() == 0) return "";
 
-void handleClaim() {
-  const String lectureId = server.arg("lectureId");
-  const String redirect = server.arg("redirect");
-  if (lectureId.length() == 0 || redirect.length() == 0) {
-    sendCorsText(400, "lectureId and redirect are required");
-    return;
-  }
-
-  const int rssi = getPrimaryRssi();
-  if (rssi < RSSI_MIN || rssi > RSSI_MAX) {
-    sendCorsText(403, "Too far");
-    return;
-  }
-
+  const int rssi = 0;
   const unsigned long issuedAtMs = millis();
   const String nonce = buildNonce();
   const String payload = lectureId + "." + String(issuedAtMs) + "." + nonce + "." + String(rssi);
   const String signature = hmacSha256Hex(payload, String(GATE_SECRET));
-  if (signature.length() == 0) {
-    sendCorsText(500, "Token signing failed");
-    return;
-  }
+  if (signature.length() == 0) return "";
 
-  const String gateToken = payload + "." + signature;
-  String target = redirect;
-  target += (target.indexOf('?') >= 0) ? "&" : "?";
-  target += "gateToken=" + gateToken;
-
-  server.sendHeader("Location", target, true);
-  server.send(302, "text/plain", "Redirecting...");
+  return payload + "." + signature;
 }
+
+class LectureIdCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* characteristic) override {
+    std::string value = characteristic->getValue();
+    lastLectureId = String(value.c_str());
+    lastLectureId.trim();
+
+    Serial.print("Received lectureId: ");
+    Serial.println(lastLectureId);
+  }
+};
+
+class TokenCallbacks : public BLECharacteristicCallbacks {
+  void onRead(BLECharacteristic* characteristic) override {
+    if (lastLectureId.length() == 0) {
+      characteristic->setValue("ERR:missing_lecture_id");
+      return;
+    }
+
+    lastIssuedToken = buildGateToken(lastLectureId);
+    if (lastIssuedToken.length() == 0) {
+      characteristic->setValue("ERR:token_sign_failed");
+      return;
+    }
+
+    characteristic->setValue(lastIssuedToken.c_str());
+    Serial.println("Issued BLE gate token");
+  }
+};
 
 void setup() {
   Serial.begin(115200);
 
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(AP_SSID, AP_PASS);
+  BLEDevice::init(BLE_DEVICE_NAME);
+  BLEServer* server = BLEDevice::createServer();
+  BLEService* service = server->createService(BLE_SERVICE_UUID);
 
-  Serial.print("ESP IP: ");
-  Serial.println(WiFi.softAPIP());
+  lectureIdCharacteristic = service->createCharacteristic(
+    BLE_LECTURE_CHAR_UUID,
+    BLECharacteristic::PROPERTY_WRITE
+  );
+  lectureIdCharacteristic->setCallbacks(new LectureIdCallbacks());
 
-  server.on("/verify", HTTP_GET, handleVerify);
-  server.on("/verify", HTTP_OPTIONS, handleOptions);
-  server.on("/claim", HTTP_GET, handleClaim);
-  server.onNotFound(handleVerify);
-  server.begin();
+  tokenCharacteristic = service->createCharacteristic(
+    BLE_TOKEN_CHAR_UUID,
+    BLECharacteristic::PROPERTY_READ
+  );
+  tokenCharacteristic->setCallbacks(new TokenCallbacks());
+  tokenCharacteristic->setValue("READY");
+
+  service->start();
+
+  BLEAdvertising* advertising = BLEDevice::getAdvertising();
+  advertising->addServiceUUID(BLE_SERVICE_UUID);
+  advertising->setScanResponse(false);
+  BLEDevice::startAdvertising();
+
+  Serial.println("BLE beacon is ready");
 }
 
 void loop() {
-  server.handleClient();
+  delay(100);
 }

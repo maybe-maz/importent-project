@@ -220,7 +220,10 @@
     const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
     const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
     const GATE_API_BASE_STORAGE_KEY = 'attendanceGateApiBaseUrl';
-    const ESP_GATE_URL_STORAGE_KEY = 'attendanceEspGateUrl';
+    const GATE_MODE_STORAGE_KEY = 'attendanceGateMode';
+    const BLE_SERVICE_UUID_STORAGE_KEY = 'attendanceBleServiceUuid';
+    const BLE_LECTURE_CHAR_UUID_STORAGE_KEY = 'attendanceBleLectureCharUuid';
+    const BLE_TOKEN_CHAR_UUID_STORAGE_KEY = 'attendanceBleTokenCharUuid';
     let latestCheckinLink = '';
 
     function goBackToSubject() {
@@ -334,19 +337,76 @@
       return '';
     }
 
-    function getEspGateUrl() {
-      const fromQuery = normalizeUrl(params.get('espGateUrl') || '');
-      if (fromQuery) {
-        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromQuery);
+    function getGateMode() {
+      const fromQuery = String(params.get('gateMode') || '').trim().toLowerCase();
+      if (fromQuery === 'bluetooth' || fromQuery === 'token') {
+        localStorage.setItem(GATE_MODE_STORAGE_KEY, fromQuery);
         return fromQuery;
       }
 
-      const fromStorage = normalizeUrl(localStorage.getItem(ESP_GATE_URL_STORAGE_KEY) || '');
+      const fromStorage = String(localStorage.getItem(GATE_MODE_STORAGE_KEY) || '').trim().toLowerCase();
+      if (fromStorage === 'bluetooth' || fromStorage === 'token') return fromStorage;
+
+      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.gateMode) || '').trim().toLowerCase();
+      if (fromConfig === 'bluetooth' || fromConfig === 'token') {
+        localStorage.setItem(GATE_MODE_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return 'bluetooth';
+    }
+
+    function getBleServiceUuid() {
+      const fromQuery = String(params.get('bleServiceUuid') || '').trim();
+      if (fromQuery) {
+        localStorage.setItem(BLE_SERVICE_UUID_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = String(localStorage.getItem(BLE_SERVICE_UUID_STORAGE_KEY) || '').trim();
       if (fromStorage) return fromStorage;
 
-      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.espGateUrl) || '');
+      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleServiceUuid) || '').trim();
       if (fromConfig) {
-        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromConfig);
+        localStorage.setItem(BLE_SERVICE_UUID_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    function getBleLectureIdCharUuid() {
+      const fromQuery = String(params.get('bleLectureIdCharUuid') || '').trim();
+      if (fromQuery) {
+        localStorage.setItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = String(localStorage.getItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY) || '').trim();
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleLectureIdCharUuid) || '').trim();
+      if (fromConfig) {
+        localStorage.setItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    function getBleTokenCharUuid() {
+      const fromQuery = String(params.get('bleTokenCharUuid') || '').trim();
+      if (fromQuery) {
+        localStorage.setItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY, fromQuery);
+        return fromQuery;
+      }
+
+      const fromStorage = String(localStorage.getItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY) || '').trim();
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleTokenCharUuid) || '').trim();
+      if (fromConfig) {
+        localStorage.setItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY, fromConfig);
         return fromConfig;
       }
 
@@ -358,7 +418,10 @@
       const apiBase = getApiBase();
       const supabaseKey = getSupabaseAnonKey();
       const gateApiBase = getGateApiBase();
-      const espGateUrl = getEspGateUrl();
+      const gateMode = getGateMode();
+      const bleServiceUuid = getBleServiceUuid();
+      const bleLectureIdCharUuid = getBleLectureIdCharUuid();
+      const bleTokenCharUuid = getBleTokenCharUuid();
       const gateRequired = !!(window.APP_CONFIG && window.APP_CONFIG.gateRequired);
       const search = new URLSearchParams({
         lectureId: data.id || '',
@@ -381,8 +444,20 @@
         search.set('gateApiBase', gateApiBase);
       }
 
-      if (espGateUrl) {
-        search.set('espGateUrl', espGateUrl);
+      if (gateMode) {
+        search.set('gateMode', gateMode);
+      }
+
+      if (bleServiceUuid) {
+        search.set('bleServiceUuid', bleServiceUuid);
+      }
+
+      if (bleLectureIdCharUuid) {
+        search.set('bleLectureIdCharUuid', bleLectureIdCharUuid);
+      }
+
+      if (bleTokenCharUuid) {
+        search.set('bleTokenCharUuid', bleTokenCharUuid);
       }
 
       if (gateRequired) {

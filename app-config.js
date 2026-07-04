@@ -4,8 +4,13 @@ window.APP_CONFIG = {
   // Example: https://YOUR_PROJECT_REF.supabase.co
   apiBase: 'https://nwvwqmcezaymypkictil.supabase.co/rest/v1/',
 
-  // Example: http://192.168.4.1 (ESP gate endpoint). Leave empty to disable ESP gate check.
-  espGateUrl: 'http://192.168.4.1',
+  // Gate mode: bluetooth | token
+  gateMode: 'bluetooth',
+
+  // BLE GATT service and characteristics exposed by ESP32 beacon.
+  bleServiceUuid: '4fafc201-1fb5-459e-8fcc-c5c9c331914b',
+  bleLectureIdCharUuid: 'beb5483e-36e1-4688-b7f5-ea07361b26a8',
+  bleTokenCharUuid: '0f3f2e60-8e92-4ea7-9f93-8b4b31c0d9aa',
 
   // Example: https://YOUR_SERVER_HOST (must host /api/gate/validate)
   gateApiBase: 'http://localhost:8000',
