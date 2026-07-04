@@ -153,7 +153,6 @@
         <input id="password" type="password" placeholder="Enter lecture password" />
       </div>
 
-      <button class="btn secondary" id="verifyGateBtn" onclick="verifyGateByWifi()">Verify via Classroom Wi-Fi</button>
       <button class="btn" id="submitBtn" onclick="submitCheckin()">Submit Check-in</button>
       <div class="msg" id="successMsg">Check-in submitted successfully.</div>
       <div class="msg" id="gateStatusMsg" style="display:none;"></div>
@@ -408,16 +407,6 @@
       }
     }
 
-    function verifyGateByWifi() {
-      const claimUrl = buildEspClaimUrl();
-      if (!claimUrl) {
-        updateGateStatusUi('Classroom Wi-Fi gate URL is missing.', false);
-        return;
-      }
-
-      window.location.href = claimUrl;
-    }
-
     async function verifyGate() {
       if (!getGateRequired()) {
         return { ok: true, skipped: true };
@@ -429,12 +418,13 @@
 
       if (!resolvedGateToken) {
         const claimUrl = buildEspClaimUrl();
-        return {
-          ok: false,
-          message: claimUrl
-            ? `Classroom verification is required. Tap Verify via Classroom Wi-Fi or open: ${claimUrl}`
-            : 'Classroom verification link is missing.'
-        };
+        if (!claimUrl) {
+          return { ok: false, message: 'Classroom verification link is missing.' };
+        }
+
+        updateGateStatusUi('Redirecting to classroom Wi-Fi verification...', false);
+        window.location.href = claimUrl;
+        return { ok: false, redirected: true, message: 'Redirecting to classroom Wi-Fi verification...' };
       }
 
       return verifyGateTokenWithApi(resolvedGateToken);
@@ -565,24 +555,17 @@
     function updateRssiUi() {
       const rule = document.getElementById('rssiRule');
       const submitBtn = document.getElementById('submitBtn');
-      const verifyBtn = document.getElementById('verifyGateBtn');
-
-      if (verifyBtn) {
-        verifyBtn.textContent = 'Verify via Classroom Wi-Fi';
-      }
 
       if (getGateRequired() && !resolvedGateToken) {
         const claimUrl = buildEspClaimUrl();
         rule.style.display = 'block';
         rule.textContent = claimUrl
-          ? `Classroom verification required. Tap verify, or open: ${claimUrl}`
+          ? `Classroom verification is automatic on submit. Direct link: ${claimUrl}`
           : 'Classroom verification required but Wi-Fi gate URL is missing.';
       } else {
         rule.style.display = 'none';
         rule.textContent = '';
       }
-
-      if (verifyBtn) verifyBtn.style.display = getGateRequired() ? 'block' : 'none';
       submitBtn.disabled = false;
       submitBtn.style.opacity = '1';
       submitBtn.style.cursor = 'pointer';
@@ -698,6 +681,9 @@
       }
 
       const gateResult = await verifyGate();
+      if (gateResult.redirected) {
+        return;
+      }
       if (!gateResult.ok) {
         alert(gateResult.message || 'Attendance gate validation failed.');
         return;
