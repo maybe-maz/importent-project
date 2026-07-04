@@ -153,7 +153,7 @@
         <input id="password" type="password" placeholder="Enter lecture password" />
       </div>
 
-      <button class="btn secondary" id="verifyGateBtn" onclick="verifyGateByBluetooth()">Verify Classroom via Bluetooth</button>
+      <button class="btn secondary" id="verifyGateBtn" onclick="verifyGateByWifi()">Verify via Classroom Wi-Fi</button>
       <button class="btn" id="submitBtn" onclick="submitCheckin()">Submit Check-in</button>
       <div class="msg" id="successMsg">Check-in submitted successfully.</div>
       <div class="msg" id="gateStatusMsg" style="display:none;"></div>
@@ -176,19 +176,14 @@
     const GATE_API_BASE_STORAGE_KEY = 'attendanceGateApiBaseUrl';
     const GATE_MODE_STORAGE_KEY = 'attendanceGateMode';
     const ESP_GATE_URL_STORAGE_KEY = 'attendanceEspGateUrl';
-    const BLE_SERVICE_UUID_STORAGE_KEY = 'attendanceBleServiceUuid';
-    const BLE_LECTURE_CHAR_UUID_STORAGE_KEY = 'attendanceBleLectureCharUuid';
-    const BLE_TOKEN_CHAR_UUID_STORAGE_KEY = 'attendanceBleTokenCharUuid';
     const CHECKIN_LOCK_PREFIX = 'checkinLock';
     const CHECKIN_META_PREFIX = 'checkinMeta';
     const NEXT_PAGE = 'student-checkin-next.html';
     const qrToken = String(params.get('qrToken') || '').trim();
     const incomingGateToken = String(params.get('gateToken') || '').trim();
     let resolvedGateToken = incomingGateToken;
-    let bluetoothGateVerified = !!incomingGateToken;
     let lectureStartTime = decodeURIComponent(start);
     let passwordUiTimerId = null;
-    let gateVerifyInProgress = false;
 
     document.getElementById('subject').textContent = decodeURIComponent(subject);
     document.getElementById('doctor').textContent = decodeURIComponent(doctor);
@@ -286,21 +281,21 @@
 
     function getGateMode() {
       const fromQuery = String(params.get('gateMode') || '').trim().toLowerCase();
-      if (fromQuery === 'hybrid' || fromQuery === 'bluetooth' || fromQuery === 'token') {
+      if (fromQuery === 'token') {
         localStorage.setItem(GATE_MODE_STORAGE_KEY, fromQuery);
         return fromQuery;
       }
 
       const fromStorage = String(localStorage.getItem(GATE_MODE_STORAGE_KEY) || '').trim().toLowerCase();
-      if (fromStorage === 'hybrid' || fromStorage === 'bluetooth' || fromStorage === 'token') return fromStorage;
+      if (fromStorage === 'token') return fromStorage;
 
       const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.gateMode) || '').trim().toLowerCase();
-      if (fromConfig === 'hybrid' || fromConfig === 'bluetooth' || fromConfig === 'token') {
+      if (fromConfig === 'token') {
         localStorage.setItem(GATE_MODE_STORAGE_KEY, fromConfig);
         return fromConfig;
       }
 
-      return 'hybrid';
+      return 'token';
     }
 
     function getEspGateUrl() {
@@ -345,10 +340,6 @@
       return `${claimBase}?${search.toString()}`;
     }
 
-    function isBluetoothSupported() {
-      return !!navigator.bluetooth;
-    }
-
     function getGateApiBase() {
       const fromQuery = normalizeUrl(params.get('gateApiBase') || '');
       if (fromQuery) {
@@ -368,63 +359,6 @@
       return '';
     }
 
-    function getBleServiceUuid() {
-      const fromQuery = String(params.get('bleServiceUuid') || '').trim();
-      if (fromQuery) {
-        localStorage.setItem(BLE_SERVICE_UUID_STORAGE_KEY, fromQuery);
-        return fromQuery;
-      }
-
-      const fromStorage = String(localStorage.getItem(BLE_SERVICE_UUID_STORAGE_KEY) || '').trim();
-      if (fromStorage) return fromStorage;
-
-      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleServiceUuid) || '').trim();
-      if (fromConfig) {
-        localStorage.setItem(BLE_SERVICE_UUID_STORAGE_KEY, fromConfig);
-        return fromConfig;
-      }
-
-      return '';
-    }
-
-    function getBleLectureIdCharUuid() {
-      const fromQuery = String(params.get('bleLectureIdCharUuid') || '').trim();
-      if (fromQuery) {
-        localStorage.setItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY, fromQuery);
-        return fromQuery;
-      }
-
-      const fromStorage = String(localStorage.getItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY) || '').trim();
-      if (fromStorage) return fromStorage;
-
-      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleLectureIdCharUuid) || '').trim();
-      if (fromConfig) {
-        localStorage.setItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY, fromConfig);
-        return fromConfig;
-      }
-
-      return '';
-    }
-
-    function getBleTokenCharUuid() {
-      const fromQuery = String(params.get('bleTokenCharUuid') || '').trim();
-      if (fromQuery) {
-        localStorage.setItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY, fromQuery);
-        return fromQuery;
-      }
-
-      const fromStorage = String(localStorage.getItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY) || '').trim();
-      if (fromStorage) return fromStorage;
-
-      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleTokenCharUuid) || '').trim();
-      if (fromConfig) {
-        localStorage.setItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY, fromConfig);
-        return fromConfig;
-      }
-
-      return '';
-    }
-
     function updateGateStatusUi(message, isOk) {
       const box = document.getElementById('gateStatusMsg');
       if (!box) return;
@@ -435,57 +369,6 @@
       box.style.borderColor = isOk ? '#99f6e4' : '#fed7aa';
     }
 
-    function bytesToUtf8(bytes) {
-      return new TextDecoder().decode(bytes);
-    }
-
-    async function requestBluetoothGateToken() {
-      if (!navigator.bluetooth) {
-        return { ok: false, message: 'Bluetooth is not supported on this browser/device.' };
-      }
-
-      const serviceUuid = getBleServiceUuid();
-      const lectureCharUuid = getBleLectureIdCharUuid();
-      const tokenCharUuid = getBleTokenCharUuid();
-
-      if (!serviceUuid || !lectureCharUuid || !tokenCharUuid) {
-        return { ok: false, message: 'Bluetooth UUID configuration is missing.' };
-      }
-
-      let device;
-      let gattServer;
-
-      try {
-        device = await navigator.bluetooth.requestDevice({
-          filters: [{ services: [serviceUuid] }],
-          optionalServices: [serviceUuid]
-        });
-
-        gattServer = await device.gatt.connect();
-        const service = await gattServer.getPrimaryService(serviceUuid);
-        const lectureChar = await service.getCharacteristic(lectureCharUuid);
-        const tokenChar = await service.getCharacteristic(tokenCharUuid);
-
-        await lectureChar.writeValue(new TextEncoder().encode(String(lectureId || '').trim()));
-        const value = await tokenChar.readValue();
-        const token = bytesToUtf8(new Uint8Array(value.buffer)).trim();
-
-        if (!token) {
-          return { ok: false, message: 'Beacon returned empty token.' };
-        }
-
-        return { ok: true, gateToken: token };
-      } catch {
-        return { ok: false, message: 'Bluetooth verification failed. Ensure beacon is powered and close to you.' };
-      } finally {
-        try {
-          if (gattServer && gattServer.connected) {
-            gattServer.disconnect();
-          }
-        } catch {
-        }
-      }
-    }
 
     async function verifyGateTokenWithApi(token) {
       const gateApiBase = getGateApiBase();
@@ -525,48 +408,14 @@
       }
     }
 
-    async function verifyGateByBluetooth() {
-      if (gateVerifyInProgress) return { ok: false, message: 'Bluetooth verification is already in progress.' };
-
-      if (!isBluetoothSupported()) {
-        const claimUrl = buildEspClaimUrl();
-        if (claimUrl) {
-          window.location.href = claimUrl;
-          return { ok: false, redirected: true, message: 'Redirecting to iOS fallback verification...' };
-        }
-        updateGateStatusUi('Bluetooth is not supported, and ESP fallback URL is missing.', false);
-        return { ok: false, message: 'Bluetooth is not supported on this browser/device.' };
+    function verifyGateByWifi() {
+      const claimUrl = buildEspClaimUrl();
+      if (!claimUrl) {
+        updateGateStatusUi('Classroom Wi-Fi gate URL is missing.', false);
+        return;
       }
 
-      gateVerifyInProgress = true;
-
-      const verifyBtn = document.getElementById('verifyGateBtn');
-      if (verifyBtn) verifyBtn.disabled = true;
-      updateGateStatusUi('Searching for classroom beacon...', false);
-
-      const tokenResult = await requestBluetoothGateToken();
-      if (!tokenResult.ok) {
-        updateGateStatusUi(tokenResult.message || 'Bluetooth verification failed.', false);
-        gateVerifyInProgress = false;
-        if (verifyBtn) verifyBtn.disabled = false;
-        return tokenResult;
-      }
-
-      const apiResult = await verifyGateTokenWithApi(tokenResult.gateToken);
-      if (!apiResult.ok) {
-        updateGateStatusUi(apiResult.message || 'Gate token verification failed.', false);
-        gateVerifyInProgress = false;
-        if (verifyBtn) verifyBtn.disabled = false;
-        return apiResult;
-      }
-
-      resolvedGateToken = tokenResult.gateToken;
-      bluetoothGateVerified = true;
-      updateGateStatusUi('Classroom verified via Bluetooth.', true);
-      updateRssiUi();
-      gateVerifyInProgress = false;
-      if (verifyBtn) verifyBtn.disabled = false;
-      return { ok: true };
+      window.location.href = claimUrl;
     }
 
     async function verifyGate() {
@@ -574,46 +423,21 @@
         return { ok: true, skipped: true };
       }
 
-      const mode = getGateMode();
-      if (mode === 'token') {
-        if (!resolvedGateToken) {
-          return { ok: false, message: 'Classroom verification token is missing.' };
-        }
-        return verifyGateTokenWithApi(resolvedGateToken);
+      if (getGateMode() !== 'token') {
+        return { ok: false, message: 'Unsupported gate mode. Expected token mode.' };
       }
 
-      if (mode === 'hybrid') {
-        if (isBluetoothSupported()) {
-          if (!bluetoothGateVerified) {
-            return {
-              ok: false,
-              message: 'Classroom verification is required. Tap "Verify Classroom via Bluetooth" first.'
-            };
-          }
-          return { ok: true };
-        }
-
-        if (!resolvedGateToken) {
-          const claimUrl = buildEspClaimUrl();
-          return {
-            ok: false,
-            message: claimUrl
-              ? `Bluetooth is not supported. Complete verification from this link first: ${claimUrl}`
-              : 'Bluetooth is not supported and fallback verification link is missing.'
-          };
-        }
-
-        return verifyGateTokenWithApi(resolvedGateToken);
-      }
-
-      if (!bluetoothGateVerified) {
+      if (!resolvedGateToken) {
+        const claimUrl = buildEspClaimUrl();
         return {
           ok: false,
-          message: 'Classroom verification is required. Tap "Verify Classroom via Bluetooth" first.'
+          message: claimUrl
+            ? `Classroom verification is required. Tap Verify via Classroom Wi-Fi or open: ${claimUrl}`
+            : 'Classroom verification link is missing.'
         };
       }
 
-      return { ok: true };
+      return verifyGateTokenWithApi(resolvedGateToken);
     }
 
     function buildNextPageUrl(studentId, studentName) {
@@ -742,33 +566,23 @@
       const rule = document.getElementById('rssiRule');
       const submitBtn = document.getElementById('submitBtn');
       const verifyBtn = document.getElementById('verifyGateBtn');
-      const mode = getGateMode();
-      const btSupported = isBluetoothSupported();
 
       if (verifyBtn) {
-        verifyBtn.textContent = btSupported ? 'Verify Classroom via Bluetooth' : 'Verify Classroom (iOS Fallback)';
+        verifyBtn.textContent = 'Verify via Classroom Wi-Fi';
       }
 
-      if (getGateRequired() && mode === 'bluetooth' && !bluetoothGateVerified) {
-        rule.style.display = 'block';
-        rule.textContent = 'Classroom verification required. Use Bluetooth button before submitting.';
-        if (verifyBtn) verifyBtn.style.display = 'block';
-      } else if (getGateRequired() && mode === 'hybrid' && !btSupported && !resolvedGateToken) {
+      if (getGateRequired() && !resolvedGateToken) {
         const claimUrl = buildEspClaimUrl();
         rule.style.display = 'block';
         rule.textContent = claimUrl
-          ? `iOS fallback required. Tap verify, or open: ${claimUrl}`
-          : 'iOS fallback required but ESP gate URL is missing.';
-        if (verifyBtn) verifyBtn.style.display = 'block';
-      } else if (getGateRequired() && mode === 'token' && !resolvedGateToken) {
-        rule.style.display = 'block';
-        rule.textContent = 'Verification token is missing from this link.';
-        if (verifyBtn) verifyBtn.style.display = 'none';
+          ? `Classroom verification required. Tap verify, or open: ${claimUrl}`
+          : 'Classroom verification required but Wi-Fi gate URL is missing.';
       } else {
         rule.style.display = 'none';
         rule.textContent = '';
-        if (verifyBtn) verifyBtn.style.display = getGateRequired() ? 'block' : 'none';
       }
+
+      if (verifyBtn) verifyBtn.style.display = getGateRequired() ? 'block' : 'none';
       submitBtn.disabled = false;
       submitBtn.style.opacity = '1';
       submitBtn.style.cursor = 'pointer';

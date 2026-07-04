@@ -222,9 +222,6 @@
     const GATE_API_BASE_STORAGE_KEY = 'attendanceGateApiBaseUrl';
     const GATE_MODE_STORAGE_KEY = 'attendanceGateMode';
     const ESP_GATE_URL_STORAGE_KEY = 'attendanceEspGateUrl';
-    const BLE_SERVICE_UUID_STORAGE_KEY = 'attendanceBleServiceUuid';
-    const BLE_LECTURE_CHAR_UUID_STORAGE_KEY = 'attendanceBleLectureCharUuid';
-    const BLE_TOKEN_CHAR_UUID_STORAGE_KEY = 'attendanceBleTokenCharUuid';
     let latestCheckinLink = '';
 
     function goBackToSubject() {
@@ -340,21 +337,21 @@
 
     function getGateMode() {
       const fromQuery = String(params.get('gateMode') || '').trim().toLowerCase();
-      if (fromQuery === 'hybrid' || fromQuery === 'bluetooth' || fromQuery === 'token') {
+      if (fromQuery === 'token') {
         localStorage.setItem(GATE_MODE_STORAGE_KEY, fromQuery);
         return fromQuery;
       }
 
       const fromStorage = String(localStorage.getItem(GATE_MODE_STORAGE_KEY) || '').trim().toLowerCase();
-      if (fromStorage === 'hybrid' || fromStorage === 'bluetooth' || fromStorage === 'token') return fromStorage;
+      if (fromStorage === 'token') return fromStorage;
 
       const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.gateMode) || '').trim().toLowerCase();
-      if (fromConfig === 'hybrid' || fromConfig === 'bluetooth' || fromConfig === 'token') {
+      if (fromConfig === 'token') {
         localStorage.setItem(GATE_MODE_STORAGE_KEY, fromConfig);
         return fromConfig;
       }
 
-      return 'hybrid';
+      return 'token';
     }
 
     function getEspGateUrl() {
@@ -376,62 +373,6 @@
       return '';
     }
 
-    function getBleServiceUuid() {
-      const fromQuery = String(params.get('bleServiceUuid') || '').trim();
-      if (fromQuery) {
-        localStorage.setItem(BLE_SERVICE_UUID_STORAGE_KEY, fromQuery);
-        return fromQuery;
-      }
-
-      const fromStorage = String(localStorage.getItem(BLE_SERVICE_UUID_STORAGE_KEY) || '').trim();
-      if (fromStorage) return fromStorage;
-
-      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleServiceUuid) || '').trim();
-      if (fromConfig) {
-        localStorage.setItem(BLE_SERVICE_UUID_STORAGE_KEY, fromConfig);
-        return fromConfig;
-      }
-
-      return '';
-    }
-
-    function getBleLectureIdCharUuid() {
-      const fromQuery = String(params.get('bleLectureIdCharUuid') || '').trim();
-      if (fromQuery) {
-        localStorage.setItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY, fromQuery);
-        return fromQuery;
-      }
-
-      const fromStorage = String(localStorage.getItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY) || '').trim();
-      if (fromStorage) return fromStorage;
-
-      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleLectureIdCharUuid) || '').trim();
-      if (fromConfig) {
-        localStorage.setItem(BLE_LECTURE_CHAR_UUID_STORAGE_KEY, fromConfig);
-        return fromConfig;
-      }
-
-      return '';
-    }
-
-    function getBleTokenCharUuid() {
-      const fromQuery = String(params.get('bleTokenCharUuid') || '').trim();
-      if (fromQuery) {
-        localStorage.setItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY, fromQuery);
-        return fromQuery;
-      }
-
-      const fromStorage = String(localStorage.getItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY) || '').trim();
-      if (fromStorage) return fromStorage;
-
-      const fromConfig = String((window.APP_CONFIG && window.APP_CONFIG.bleTokenCharUuid) || '').trim();
-      if (fromConfig) {
-        localStorage.setItem(BLE_TOKEN_CHAR_UUID_STORAGE_KEY, fromConfig);
-        return fromConfig;
-      }
-
-      return '';
-    }
 
     async function issueQrToken(lectureId) {
       const gateApiBase = getGateApiBase();
@@ -461,9 +402,6 @@
       const gateApiBase = getGateApiBase();
       const gateMode = getGateMode();
       const espGateUrl = getEspGateUrl();
-      const bleServiceUuid = getBleServiceUuid();
-      const bleLectureIdCharUuid = getBleLectureIdCharUuid();
-      const bleTokenCharUuid = getBleTokenCharUuid();
       const qrToken = await issueQrToken(data.id || '');
       const gateRequired = !!(window.APP_CONFIG && window.APP_CONFIG.gateRequired);
       const search = new URLSearchParams({
@@ -493,18 +431,6 @@
 
       if (espGateUrl) {
         search.set('espGateUrl', espGateUrl);
-      }
-
-      if (bleServiceUuid) {
-        search.set('bleServiceUuid', bleServiceUuid);
-      }
-
-      if (bleLectureIdCharUuid) {
-        search.set('bleLectureIdCharUuid', bleLectureIdCharUuid);
-      }
-
-      if (bleTokenCharUuid) {
-        search.set('bleTokenCharUuid', bleTokenCharUuid);
       }
 
       if (gateRequired) {
