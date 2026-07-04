@@ -161,7 +161,7 @@
     </div>
   </div>
 
-  <script src="app-config.js?v=2"></script>
+  <script src="app-config.js?v=3"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
     const lectureId = params.get('lectureId') || '';
@@ -297,19 +297,19 @@
     }
 
     function getEspGateUrl() {
-      const fromQuery = normalizeUrl(params.get('espGateUrl') || '');
-      if (fromQuery) {
-        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromQuery);
-        return fromQuery;
+      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.espGateUrl) || '');
+      if (fromConfig) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromConfig);
+        return fromConfig;
       }
 
       const fromStorage = normalizeUrl(localStorage.getItem(ESP_GATE_URL_STORAGE_KEY) || '');
       if (fromStorage) return fromStorage;
 
-      const fromConfig = normalizeUrl((window.APP_CONFIG && window.APP_CONFIG.espGateUrl) || '');
-      if (fromConfig) {
-        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromConfig);
-        return fromConfig;
+      const fromQuery = normalizeUrl(params.get('espGateUrl') || '');
+      if (fromQuery) {
+        localStorage.setItem(ESP_GATE_URL_STORAGE_KEY, fromQuery);
+        return fromQuery;
       }
 
       return '';
