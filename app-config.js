@@ -7,8 +7,8 @@ window.APP_CONFIG = {
   // Gate mode: token (Wi-Fi claim only)
   gateMode: 'token',
 
-  // iOS fallback gate endpoint (ESP32 AP HTTP claim).
-  espGateUrl: 'http://192.168.4.1',
+  // ESP32 gate endpoint on classroom Wi-Fi (STA + DHCP).
+  espGateUrl: 'http://lecture-gate.local',
 
   // Example: https://YOUR_SERVER_HOST (must host /api/gate/validate)
   gateApiBase: 'http://localhost:8000',

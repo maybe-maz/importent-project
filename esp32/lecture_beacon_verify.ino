@@ -1,9 +1,11 @@
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ESPmDNS.h>
 #include "mbedtls/md.h"
 
-const char* AP_SSID = "LECTURE_BEACON";
-const char* AP_PASS = "12345678";
+const char* WIFI_SSID = "Alaa_5G";
+const char* WIFI_PASS = "A132457@";
+const char* MDNS_HOST = "lecture-gate";
 const char* GATE_SECRET = "CHANGE_ME_GATE_SECRET";
 
 WebServer webServer(80);
@@ -79,13 +81,34 @@ void handleClaim() {
 void setup() {
   Serial.begin(115200);
 
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(AP_SSID, AP_PASS);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  Serial.print("Connecting to Wi-Fi");
+  unsigned long startedAt = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - startedAt) < 20000) {
+    delay(400);
+    Serial.print('.');
+  }
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("STA IP: ");
+    Serial.println(WiFi.localIP());
+
+    if (MDNS.begin(MDNS_HOST)) {
+      Serial.print("mDNS: http://");
+      Serial.print(MDNS_HOST);
+      Serial.println(".local");
+    } else {
+      Serial.println("mDNS start failed");
+    }
+  } else {
+    Serial.println("Wi-Fi connect timeout; gate may be unreachable until network recovers.");
+  }
+
   webServer.on("/claim", HTTP_GET, handleClaim);
   webServer.begin();
-
-  Serial.print("AP IP: ");
-  Serial.println(WiFi.softAPIP());
   Serial.println("Wi-Fi gate is ready");
 }
 
