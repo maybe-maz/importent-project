@@ -11,7 +11,7 @@ window.APP_CONFIG = {
   espGateUrl: 'http://192.168.1.65',
 
   // Example: https://YOUR_SERVER_HOST (must host /api/gate/validate)
-  gateApiBase: 'http://localhost:8000',
+  gateApiBase: 'http://192.168.1.51:8000',
 
   // When true, check-in is blocked unless a valid gate token is present.
   gateRequired: true,
