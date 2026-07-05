@@ -375,8 +375,8 @@
 
 
     async function buildCheckinUrl(data) {
-      // For Captive Portal: direct link to ESP32 AP
-      return 'http://192.168.4.1/';
+      // QR links directly to ESP32 Captive Portal with lectureId
+      return 'http://192.168.4.1/?lectureId=' + encodeURIComponent(data.id || '');
     }
 
     function buildQrUrl(text) {
