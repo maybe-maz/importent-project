@@ -375,47 +375,8 @@
 
 
     async function buildCheckinUrl(data) {
-      const baseUrl = getBaseUrl();
-      const apiBase = getApiBase();
-      const supabaseKey = getSupabaseAnonKey();
-      const gateApiBase = getGateApiBase();
-      const gateMode = getGateMode();
-      const espGateUrl = getEspGateUrl();
-      const gateRequired = !!(window.APP_CONFIG && window.APP_CONFIG.gateRequired);
-      const search = new URLSearchParams({
-        lectureId: data.id || '',
-        subject: subject || '',
-        doctor: doctor || '',
-        room: data.roomNumber || '-',
-        start: data.startTime || '-',
-        end: data.endTime || '-'
-      });
-
-      if (apiBase) {
-        search.set('apiBase', apiBase);
-      }
-
-      if (supabaseKey) {
-        search.set('sbKey', supabaseKey);
-      }
-
-      if (gateApiBase) {
-        search.set('gateApiBase', gateApiBase);
-      }
-
-      if (gateMode) {
-        search.set('gateMode', gateMode);
-      }
-
-      if (espGateUrl) {
-        search.set('espGateUrl', espGateUrl);
-      }
-
-      if (gateRequired) {
-        search.set('gateRequired', '1');
-      }
-
-      return `${baseUrl}/student-checkin.html?${search.toString()}`;
+      // For Captive Portal: direct link to ESP32 AP
+      return 'http://192.168.4.1/';
     }
 
     function buildQrUrl(text) {

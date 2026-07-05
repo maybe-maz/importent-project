@@ -1,11 +1,10 @@
 #include <WiFi.h>
 #include <WebServer.h>
-#include <ESPmDNS.h>
 #include "mbedtls/md.h"
 
-const char* WIFI_SSID = "Alaa_4G";
-const char* WIFI_PASS = "A132457@";
-const char* MDNS_HOST = "lecture-gate";
+// Captive Portal AP mode
+const char* AP_SSID = "LECTURE_BEACON";
+const char* AP_PASS = "12345678";
 const char* GATE_SECRET = "maz";
 
 WebServer webServer(80);
@@ -45,95 +44,49 @@ String buildNonce() {
 
 String buildGateToken(const String& lectureId) {
   if (lectureId.length() == 0) return "";
-
-  // Read actual Wi-Fi signal strength (RSSI in dBm)
   int32_t rssi = WiFi.RSSI();
-  
-  // Reject token if signal is too weak (out of range)
   if (rssi < -75) {
-    Serial.println("RSSI too weak: " + String(rssi) + " dBm - rejecting token");
+    Serial.println("RSSI too weak: " + String(rssi) + " dBm");
     return "ERROR:OUT_OF_RANGE";
   }
-
   const unsigned long issuedAtMs = millis();
   const String nonce = buildNonce();
   const String payload = lectureId + "." + String(issuedAtMs) + "." + nonce + "." + String(rssi);
   const String signature = hmacSha256Hex(payload, String(GATE_SECRET));
-  if (signature.length() == 0) return "";
-
   return payload + "." + signature;
 }
 
-void handleTest() {
-  int32_t rssi = WiFi.RSSI();
-  String token = buildGateToken("TEST_LECTURE");
-  
-  String response = "{";
-  response += "\"rssi\":" + String(rssi) + ",";
-  response += "\"token\":\"" + token + "\",";
-  response += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
-  response += "\"status\":" + String(WiFi.status());
-  response += "}";
-  
-  webServer.sendHeader("Content-Type", "application/json");
-  webServer.send(200, "application/json", response);
+void handlePortal() {
+  String html = R"rawliteral(<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Gate Portal</title><style>body{font-family:Arial;background:#f0f0f0;display:flex;justify-content:center;align-items:center;height:100vh}.container{background:white;padding:40px;border-radius:10px;width:90%;max-width:400px}.form-group{margin:20px 0}label{display:block;margin:8px 0;font-weight:bold}input{width:100%;padding:12px;border:1px solid #ddd;border-radius:5px;font-size:16px}button{width:100%;padding:12px;background:#0066cc;color:white;border:none;border-radius:5px;font-size:16px;cursor:pointer;margin-top:20px}button:hover{background:#0052a3}.error{color:red;text-align:center;margin:10px 0}</style></head><body><div class="container"><h1>Student Check-In</h1><form id="form"><div class="form-group"><label>Student ID:</label><input type="text" id="studentId" required></div><div class="form-group"><label>Student Name:</label><input type="text" id="studentName" required></div><button type="submit">Get Token</button></form><div id="error" class="error"></div></div><script>document.getElementById('form').onsubmit=async(e)=>{e.preventDefault();const s=document.getElementById('studentId').value;const n=document.getElementById('studentName').value;try{const r=await fetch('/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:s,studentName:n})});const d=await r.json();if(d.success){window.location.href='https://maybe-maz.github.io/importent-project/student-checkin.html?gateToken='+encodeURIComponent(d.gateToken)+'&lectureId='+encodeURIComponent(d.lectureId);}else{document.getElementById('error').textContent=d.error||'Failed';}}catch(e){document.getElementById('error').textContent='Error: '+e.message;}};</script></body></html>)rawliteral";
+  webServer.send(200, "text/html", html);
 }
 
-void handleClaim() {
-  const String lectureId = webServer.arg("lectureId");
-  const String redirect = webServer.arg("redirect");
-  if (lectureId.length() == 0 || redirect.length() == 0) {
-    webServer.send(400, "text/plain", "lectureId and redirect are required");
-    return;
-  }
-
-  const String gateToken = buildGateToken(lectureId);
-  if (gateToken.length() == 0) {
-    webServer.send(500, "text/plain", "Token signing failed");
-    return;
-  }
-
-  String target = redirect;
-  target += (target.indexOf('?') >= 0) ? "&" : "?";
-  target += "gateToken=" + gateToken;
-
-  webServer.sendHeader("Location", target, true);
-  webServer.send(302, "text/plain", "Redirecting...");
+void handleVerify() {
+  String body = webServer.arg("plain");
+  int idStart = body.indexOf("\"studentId\":\"") + 13;
+  int idEnd = body.indexOf("\"", idStart);
+  String studentId = body.substring(idStart, idEnd);
+  
+  String gateToken = buildGateToken("LECTURE_001");
+  String response = "{\"success\":true,\"gateToken\":\"" + gateToken + "\",\"lectureId\":\"LECTURE_001\"}";
+  webServer.send(200, "application/json", response);
 }
 
 void setup() {
   Serial.begin(115200);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-
-  Serial.print("Connecting to Wi-Fi");
-  unsigned long startedAt = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - startedAt) < 20000) {
-    delay(400);
-    Serial.print('.');
-  }
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("STA IP: ");
-    Serial.println(WiFi.localIP());
-
-    if (MDNS.begin(MDNS_HOST)) {
-      Serial.print("mDNS: http://");
-      Serial.print(MDNS_HOST);
-      Serial.println(".local");
-    } else {
-      Serial.println("mDNS start failed");
-    }
-  } else {
-    Serial.println("Wi-Fi connect timeout; gate may be unreachable until network recovers.");
-  }
-
-  webServer.on("/test", HTTP_GET, handleTest);
-  webServer.on("/claim", HTTP_GET, handleClaim);
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(AP_SSID, AP_PASS);
+  Serial.println("\n\nAP Mode:");
+  Serial.print("SSID: ");
+  Serial.println(AP_SSID);
+  Serial.print("IP: ");
+  Serial.println(WiFi.softAPIP());
+  
+  webServer.on("/", HTTP_GET, handlePortal);
+  webServer.on("/portal", HTTP_GET, handlePortal);
+  webServer.on("/verify", HTTP_POST, handleVerify);
   webServer.begin();
-  Serial.println("Wi-Fi gate is ready");
+  Serial.println("Server ready");
 }
 
 void loop() {
