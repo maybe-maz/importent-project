@@ -8,7 +8,7 @@ window.APP_CONFIG = {
   gateMode: 'token',
 
   // ESP32 gate endpoint on classroom Wi-Fi (STA + DHCP).
-  espGateUrl: 'http://lecture-gate.local',
+  espGateUrl: 'http://192.168.1.65',
 
   // Example: https://YOUR_SERVER_HOST (must host /api/gate/validate)
   gateApiBase: 'http://localhost:8000',
