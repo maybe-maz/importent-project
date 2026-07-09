@@ -12,8 +12,22 @@ const char* SUPA_URL = "https://nwvwqmcezaymypkictil.supabase.co";
 const char* SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53dndxbWNlemF5bXlwa2ljdGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NzI5MjAsImV4cCI6MjA5ODE0ODkyMH0.sv03G8WixXmy6cx4P5PZvBdbJK6yQAPLZd60C__KeEI";
 const int RSSI_THRESHOLD = -75;
 const int PASSWORD_AFTER_MINUTES = 15;
+const int MAX_DEVICE_LOCKS = 80;
 
 WebServer webServer(80);
+
+struct DeviceLockEntry {
+  bool used;
+  String lectureId;
+  String stationMac;
+  String studentId;
+  String studentName;
+  String status;
+  String note;
+  unsigned long updatedAt;
+};
+
+DeviceLockEntry deviceLocks[MAX_DEVICE_LOCKS];
 
 int8_t getClientRssi() {
   wifi_sta_list_t stalist;
@@ -27,6 +41,75 @@ int8_t getClientRssi() {
   int8_t rssi = stalist.sta[0].rssi;
   Serial.printf("[RSSI] RSSI: %d dBm\n", rssi);
   return rssi;
+}
+
+String stationMacToString(const uint8_t mac[6]) {
+  char buff[18];
+  snprintf(
+    buff,
+    sizeof(buff),
+    "%02X:%02X:%02X:%02X:%02X:%02X",
+    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+  );
+  return String(buff);
+}
+
+String getFirstConnectedStationMac() {
+  wifi_sta_list_t staList;
+  esp_wifi_ap_get_sta_list(&staList);
+  if (staList.num <= 0) return "";
+  return stationMacToString(staList.sta[0].mac);
+}
+
+int findDeviceLockIndex(const String& lectureId, const String& stationMac) {
+  for (int i = 0; i < MAX_DEVICE_LOCKS; i++) {
+    if (!deviceLocks[i].used) continue;
+    if (deviceLocks[i].lectureId == lectureId && deviceLocks[i].stationMac == stationMac) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int findFreeDeviceLockSlot() {
+  for (int i = 0; i < MAX_DEVICE_LOCKS; i++) {
+    if (!deviceLocks[i].used) return i;
+  }
+
+  int oldestIndex = 0;
+  unsigned long oldestTime = deviceLocks[0].updatedAt;
+  for (int i = 1; i < MAX_DEVICE_LOCKS; i++) {
+    if (deviceLocks[i].updatedAt < oldestTime) {
+      oldestTime = deviceLocks[i].updatedAt;
+      oldestIndex = i;
+    }
+  }
+  return oldestIndex;
+}
+
+void upsertDeviceLock(
+  const String& lectureId,
+  const String& stationMac,
+  const String& studentId,
+  const String& studentName,
+  const String& status,
+  const String& note
+) {
+  if (lectureId.isEmpty() || stationMac.isEmpty()) return;
+
+  int idx = findDeviceLockIndex(lectureId, stationMac);
+  if (idx < 0) {
+    idx = findFreeDeviceLockSlot();
+  }
+
+  deviceLocks[idx].used = true;
+  deviceLocks[idx].lectureId = lectureId;
+  deviceLocks[idx].stationMac = stationMac;
+  deviceLocks[idx].studentId = studentId;
+  deviceLocks[idx].studentName = studentName;
+  deviceLocks[idx].status = status;
+  deviceLocks[idx].note = note;
+  deviceLocks[idx].updatedAt = millis();
 }
 
 String escapeJson(const String& value) {
@@ -199,8 +282,25 @@ String buildPortalHtml(const String& lectureId) {
     const lid = document.getElementById('lid').value;
     const lockKey = `espCheckinLock::${lid}`;
     const metaKey = `espCheckinMeta::${lid}`;
+    const lockCookieKey = `espCheckinLock_${lid}`;
+    const metaCookieKey = `espCheckinMeta_${lid}`;
     let passwordRequired = false;
     let knownStartTime = '';
+
+    function setCookie(name, value, maxAgeSeconds){
+      document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; samesite=lax`;
+    }
+
+    function getCookie(name){
+      const encodedName = `${encodeURIComponent(name)}=`;
+      const parts = document.cookie ? document.cookie.split('; ') : [];
+      for(const part of parts){
+        if(part.startsWith(encodedName)){
+          return decodeURIComponent(part.substring(encodedName.length));
+        }
+      }
+      return '';
+    }
 
     function hhmmValue(value){
       const m = String(value || '').match(/^(\d{2}:\d{2})/);
@@ -242,14 +342,34 @@ String buildPortalHtml(const String& lectureId) {
     }
 
     function redirectIfLocked(){
-      if(localStorage.getItem(lockKey) !== '1') return false;
+      const localLocked = localStorage.getItem(lockKey) === '1';
+      const cookieLocked = getCookie(lockCookieKey) === '1';
+      if(!localLocked && !cookieLocked) return false;
+
       try {
-        const meta = JSON.parse(localStorage.getItem(metaKey) || '{}');
+        const localMetaRaw = localStorage.getItem(metaKey) || '';
+        const cookieMetaRaw = getCookie(metaCookieKey) || '';
+        const raw = localMetaRaw || cookieMetaRaw || '{}';
+        const meta = JSON.parse(raw);
         window.location.replace(toNextUrl(meta.studentId, meta.studentName, meta.status, meta.note));
       } catch {
         window.location.replace(toNextUrl('', '', '', ''));
       }
       return true;
+    }
+
+    async function enforceServerLock(){
+      if(!lid) return false;
+      try {
+        const r = await fetch(`/lock-status?lectureId=${encodeURIComponent(lid)}`);
+        const d = await r.json();
+        if(d && d.ok && d.locked){
+          window.location.replace(toNextUrl(d.studentId || '', d.studentName || '', d.status || '', d.note || ''));
+          return true;
+        }
+      } catch {
+      }
+      return false;
     }
 
     async function loadLectureInfo(){
@@ -314,13 +434,18 @@ String buildPortalHtml(const String& lectureId) {
         if(d.ok){
           msg.className = 'ok';
           msg.textContent = 'Attendance: ' + (d.status || 'saved');
-          localStorage.setItem(lockKey, '1');
-          localStorage.setItem(metaKey, JSON.stringify({
+          const savedMeta = JSON.stringify({
             studentId: sid,
             studentName: sname,
             status: d.status || '',
             note: d.note || ''
-          }));
+          });
+
+          localStorage.setItem(lockKey, '1');
+          localStorage.setItem(metaKey, savedMeta);
+          setCookie(lockCookieKey, '1', 60 * 60 * 24 * 30);
+          setCookie(metaCookieKey, savedMeta, 60 * 60 * 24 * 30);
+
           window.location.href = toNextUrl(sid, sname, d.status || '', d.note || '');
           return;
         }
@@ -333,7 +458,11 @@ String buildPortalHtml(const String& lectureId) {
     };
 
     if(!redirectIfLocked()){
-      loadLectureInfo();
+      enforceServerLock().then((locked) => {
+        if(!locked){
+          loadLectureInfo();
+        }
+      });
       setInterval(loadLectureInfo, 30000);
     }
   </script>
@@ -444,6 +573,35 @@ void handleLectureInfo() {
   webServer.send(200, "application/json", payload);
 }
 
+void handleLockStatus() {
+  String lectureId = webServer.arg("lectureId");
+  if (lectureId.isEmpty()) {
+    webServer.send(400, "application/json", "{\"ok\":false,\"message\":\"Missing lectureId\"}");
+    return;
+  }
+
+  String stationMac = getFirstConnectedStationMac();
+  if (stationMac.isEmpty()) {
+    webServer.send(200, "application/json", "{\"ok\":true,\"locked\":false}");
+    return;
+  }
+
+  int idx = findDeviceLockIndex(lectureId, stationMac);
+  if (idx < 0) {
+    webServer.send(200, "application/json", "{\"ok\":true,\"locked\":false}");
+    return;
+  }
+
+  String payload = "{\"ok\":true,\"locked\":true"
+    ",\"studentId\":\"" + escapeJson(deviceLocks[idx].studentId) + "\""
+    ",\"studentName\":\"" + escapeJson(deviceLocks[idx].studentName) + "\""
+    ",\"status\":\"" + escapeJson(deviceLocks[idx].status) + "\""
+    ",\"note\":\"" + escapeJson(deviceLocks[idx].note) + "\""
+    "}";
+
+  webServer.send(200, "application/json", payload);
+}
+
 void handleSubmit() {
   String body = webServer.arg("plain");
   String lectureId = extractJsonValue(body, "lectureId");
@@ -467,7 +625,17 @@ void handleSubmit() {
     return;
   }
 
-  webServer.send(200, "application/json", callSupabaseCheckin(lectureId, studentId, studentName, password));
+  String responseBody = callSupabaseCheckin(lectureId, studentId, studentName, password);
+  String okValue = extractJsonValue(responseBody, "ok");
+  String status = extractJsonValue(responseBody, "status");
+  String note = extractJsonValue(responseBody, "note");
+
+  if (okValue == "true" || okValue == "1") {
+    String stationMac = getFirstConnectedStationMac();
+    upsertDeviceLock(lectureId, stationMac, studentId, studentName, status, note);
+  }
+
+  webServer.send(200, "application/json", responseBody);
 }
 
 void handleNextPage() {
@@ -498,6 +666,7 @@ void setup() {
   webServer.on("/", HTTP_GET, handlePortal);
   webServer.on("/portal", HTTP_GET, handlePortal);
   webServer.on("/lecture-info", HTTP_GET, handleLectureInfo);
+  webServer.on("/lock-status", HTTP_GET, handleLockStatus);
   webServer.on("/submit", HTTP_POST, handleSubmit);
   webServer.on("/next", HTTP_GET, handleNextPage);
   webServer.begin();
