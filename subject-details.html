@@ -623,7 +623,7 @@
       const sbKey = getSupabaseAnonKey();
       if (apiBase) search.set('apiBase', apiBase);
       if (sbKey) search.set('sbKey', sbKey);
-      window.location.href = `lecture-attendance.html?${search.toString()}`;
+      window.location.href = `lecture-attendance.html?v=20260709&${search.toString()}`;
     }
 
     function openLecturePage(index) {
@@ -638,7 +638,7 @@
       const sbKey = getSupabaseAnonKey();
       if (apiBase) search.set('apiBase', apiBase);
       if (sbKey) search.set('sbKey', sbKey);
-      window.location.href = `lecture-details.html?${search.toString()}`;
+      window.location.href = `lecture-details.html?v=20260709&${search.toString()}`;
     }
 
     async function deleteLecture(id) {
