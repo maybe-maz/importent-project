@@ -336,6 +336,8 @@
   <script>
     const STORAGE_KEY = 'doctorSubjects';
     const HISTORY_KEY = 'pageHistory';
+    const API_BASE_STORAGE_KEY = 'attendanceApiBaseUrl';
+    const SUPABASE_ANON_KEY_STORAGE_KEY = 'attendanceSupabaseAnonKey';
     const LOCAL_LECTURES_KEY_PREFIX = 'savedLectures';
     const HIDDEN_LECTURES_KEY_PREFIX = 'hiddenLectures';
     let editMode = false;
@@ -367,6 +369,127 @@
       sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
     }
 
+    function normalizeApiBase(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/\/+$/, '');
+    }
+
+    function getApiBase() {
+      const fromStorage = normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '');
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = normalizeApiBase((window.APP_CONFIG && window.APP_CONFIG.apiBase) || '');
+      if (fromConfig) {
+        localStorage.setItem(API_BASE_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    function getSupabaseRestBase() {
+      const base = getApiBase();
+      if (!base) return '';
+      if (base.includes('/rest/v1')) return base;
+      if (base.includes('.supabase.co')) return `${base}/rest/v1`;
+      return '';
+    }
+
+    function getSupabaseAnonKey() {
+      const fromStorage = (localStorage.getItem(SUPABASE_ANON_KEY_STORAGE_KEY) || '').trim();
+      if (fromStorage) return fromStorage;
+
+      const fromConfig = ((window.APP_CONFIG && window.APP_CONFIG.supabaseAnonKey) || '').trim();
+      if (fromConfig) {
+        localStorage.setItem(SUPABASE_ANON_KEY_STORAGE_KEY, fromConfig);
+        return fromConfig;
+      }
+
+      return '';
+    }
+
+    function isSupabaseConfigured() {
+      return !!(getSupabaseRestBase() && getSupabaseAnonKey());
+    }
+
+    function getSupabaseHeaders() {
+      const key = getSupabaseAnonKey();
+      return {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`
+      };
+    }
+
+    function getLocalLecturesKey(subjectName, doctorName) {
+      return `${LOCAL_LECTURES_KEY_PREFIX}::${subjectName}::${doctorName}`;
+    }
+
+    function getHiddenLecturesKey(subjectName, doctorName) {
+      return `${HIDDEN_LECTURES_KEY_PREFIX}::${subjectName}::${doctorName}`;
+    }
+
+    function loadLocalLecturesBySubject(subjectName, doctorName) {
+      try {
+        return JSON.parse(localStorage.getItem(getLocalLecturesKey(subjectName, doctorName)) || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    async function deleteRemoteLectureById(lectureId) {
+      if (!lectureId) return;
+
+      if (isSupabaseConfigured()) {
+        const restBase = getSupabaseRestBase();
+        const headers = getSupabaseHeaders();
+        await fetch(`${restBase}/attendance?lecture_id=eq.${encodeURIComponent(String(lectureId))}`, {
+          method: 'DELETE',
+          headers
+        }).catch(() => null);
+
+        await fetch(`${restBase}/lectures?id=eq.${encodeURIComponent(String(lectureId))}`, {
+          method: 'DELETE',
+          headers
+        }).catch(() => null);
+        return;
+      }
+
+      const apiBase = getApiBase();
+      if (!apiBase) return;
+      await fetch(`${apiBase}/api/lectures/${encodeURIComponent(String(lectureId))}`, {
+        method: 'DELETE'
+      }).catch(() => null);
+    }
+
+    async function deleteSubjectRemoteData(subjectName, doctorName) {
+      if (isSupabaseConfigured()) {
+        const restBase = getSupabaseRestBase();
+        const headers = getSupabaseHeaders();
+        const url = `${restBase}/lectures?subject=eq.${encodeURIComponent(subjectName)}&doctor=eq.${encodeURIComponent(doctorName)}&select=id`;
+        const response = await fetch(url, { headers });
+        if (!response.ok) return;
+
+        const rows = await response.json();
+        for (const row of rows) {
+          await deleteRemoteLectureById(row && row.id);
+        }
+        return;
+      }
+
+      const apiBase = getApiBase();
+      if (!apiBase) return;
+      const search = new URLSearchParams({ subject: subjectName, doctor: doctorName });
+      const response = await fetch(`${apiBase}/api/lectures?${search.toString()}`).catch(() => null);
+      if (!response || !response.ok) return;
+
+      const rows = await response.json();
+      for (const lecture of rows) {
+        await deleteRemoteLectureById(lecture && lecture.id);
+      }
+    }
+
     function clearSubjectData(subjectEntry) {
       if (!subjectEntry) return;
 
@@ -374,8 +497,15 @@
       const doctorName = (subjectEntry.doctor || '').trim();
       if (!subjectName || !doctorName) return;
 
-      const localLecturesKey = `${LOCAL_LECTURES_KEY_PREFIX}::${subjectName}::${doctorName}`;
-      const hiddenLecturesKey = `${HIDDEN_LECTURES_KEY_PREFIX}::${subjectName}::${doctorName}`;
+      const localLectures = loadLocalLecturesBySubject(subjectName, doctorName);
+      for (const lecture of localLectures) {
+        if (lecture && lecture.id) {
+          localStorage.removeItem(`checkin-lock::${lecture.id}`);
+        }
+      }
+
+      const localLecturesKey = getLocalLecturesKey(subjectName, doctorName);
+      const hiddenLecturesKey = getHiddenLecturesKey(subjectName, doctorName);
       localStorage.removeItem(localLecturesKey);
       localStorage.removeItem(hiddenLecturesKey);
 
@@ -458,8 +588,18 @@
       document.getElementById('subjectName').value = '';
     }
 
-    function deleteSubject(index) {
+    async function deleteSubject(index) {
       const deletedSubject = subjects[index];
+      if (!deletedSubject) return;
+
+      const subjectName = (deletedSubject.subject || '').trim();
+      const doctorName = (deletedSubject.doctor || '').trim();
+
+      try {
+        await deleteSubjectRemoteData(subjectName, doctorName);
+      } catch {
+      }
+
       clearSubjectData(deletedSubject);
       subjects.splice(index, 1);
       saveSubjectsToStorage();
