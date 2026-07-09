@@ -25,13 +25,40 @@
     .topbar {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: space-between;
       background: white;
       padding: 14px 18px;
       border-radius: 16px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.06);
       margin-bottom: 18px;
-      direction: rtl;
+      direction: ltr;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      width: auto;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      width: auto;
+    }
+
+    .add-session-btn {
+      background: #1b2f56;
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      order: 1;
     }
 
     .popup {
@@ -169,7 +196,7 @@
       text-align: right;
       gap: 3px;
       line-height: 1.2;
-      margin-left: 8px;
+      margin-left: 0;
     }
 
     .page-title-subject {
@@ -348,7 +375,12 @@
     <div class="breadcrumb-bar" id="breadcrumb"></div>
 
     <div class="topbar">
-      <div class="page-title" id="pageTitle">Subject Details</div>
+      <div class="topbar-left">
+        <button class="add-session-btn" onclick="openPopup()">+ New Session</button>
+      </div>
+      <div class="topbar-right">
+        <div class="page-title" id="pageTitle">Subject Details</div>
+      </div>
     </div>
 
     <div class="sessions-title">Sessions</div>
