@@ -14,7 +14,7 @@ const usedGateNonces = new Map();
 const DEFAULT_ROSTER = [
   { id: '241100150', name: 'Yahya Shujaa', time: '-', status: 'absent', note: '-' },
   { id: '231100147', name: 'Rayan Alqahtani', time: '-', status: 'absent', note: '-' },
-  { id: '241100519', name: 'Mazen Almunjad', time: '-', status: 'absent', note: '-' }
+  { id: '241100519', name: 'Mazen Almonajed', time: '-', status: 'absent', note: '-' }
 ];
 
 app.use(express.json());
