@@ -655,7 +655,7 @@
       const sbKey = getSupabaseAnonKey();
       if (apiBase) search.set('apiBase', apiBase);
       if (sbKey) search.set('sbKey', sbKey);
-      window.location.href = `lecture-attendance.html?v=20260709&${search.toString()}`;
+      window.location.href = `lecture-attendance.html?v=20260710&${search.toString()}`;
     }
 
     function openLecturePage(index) {
@@ -670,7 +670,7 @@
       const sbKey = getSupabaseAnonKey();
       if (apiBase) search.set('apiBase', apiBase);
       if (sbKey) search.set('sbKey', sbKey);
-      window.location.href = `lecture-details.html?v=20260709&${search.toString()}`;
+      window.location.href = `lecture-details.html?v=20260710&${search.toString()}`;
     }
 
     async function deleteLecture(id) {
@@ -837,7 +837,7 @@
           return `<span class="crumb-current">${item}</span>`;
         }
 
-        const href = item === 'Home' ? 'indext.html?v=20260709' : 'doctor.html?v=20260709';
+        const href = item === 'Home' ? 'indext.html?v=20260710' : 'doctor.html?v=20260710';
         return `<a class="crumb-link" href="${href}">${item}</a>`;
       }).join('<span class="crumb-sep">/</span>');
     }

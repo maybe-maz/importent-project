@@ -378,7 +378,7 @@
           return `<span class="crumb-current">${item}</span>`;
         }
 
-        const href = item === 'Home' ? 'indext.html?v=20260709' : 'doctor.html?v=20260709';
+        const href = item === 'Home' ? 'indext.html?v=20260710' : 'doctor.html?v=20260710';
         return `<a class="crumb-link" href="${href}">${item}</a>`;
       }).join('<span class="crumb-sep">/</span>');
     }
@@ -476,7 +476,7 @@
         div.onclick = () => {
           const subjectName = encodeURIComponent(item.subject);
           const doctorName = encodeURIComponent(item.doctor);
-          window.location.href = `subject-details.html?v=20260709&subject=${subjectName}&doctor=${doctorName}`;
+          window.location.href = `subject-details.html?v=20260710&subject=${subjectName}&doctor=${doctorName}`;
         };
         list.appendChild(div);
       });

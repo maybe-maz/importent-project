@@ -339,11 +339,11 @@
 
       <div class="right-info">
         <div class="crumbs">
-          <a href="indext.html?v=20260709">Home</a>
+          <a href="indext.html?v=20260710">Home</a>
           <span class="crumb-sep">/</span>
-          <a href="doctor.html?v=20260709">Doctor Dashboard</a>
+          <a href="doctor.html?v=20260710">Doctor Dashboard</a>
           <span class="crumb-sep">/</span>
-          <a id="subjectCrumbLink" href="subject-details.html?v=20260709">Subject</a>
+          <a id="subjectCrumbLink" href="subject-details.html?v=20260710">Subject</a>
           <span class="crumb-sep">/</span>
           <span class="crumb-current">Session Details</span>
         </div>
@@ -776,9 +776,9 @@
       const subjectCrumbLink = document.getElementById('subjectCrumbLink');
       subjectCrumbLink.textContent = subjectName;
       if (subject && doctor) {
-        subjectCrumbLink.href = `subject-details.html?v=20260709&subject=${encodeURIComponent(subject)}&doctor=${encodeURIComponent(doctor)}`;
+        subjectCrumbLink.href = `subject-details.html?v=20260710&subject=${encodeURIComponent(subject)}&doctor=${encodeURIComponent(doctor)}`;
       } else {
-        subjectCrumbLink.href = 'subject-details.html?v=20260709';
+        subjectCrumbLink.href = 'subject-details.html?v=20260710';
       }
 
       if (lecture) {
