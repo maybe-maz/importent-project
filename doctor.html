@@ -336,6 +336,8 @@
   <script>
     const STORAGE_KEY = 'doctorSubjects';
     const HISTORY_KEY = 'pageHistory';
+    const LOCAL_LECTURES_KEY_PREFIX = 'savedLectures';
+    const HIDDEN_LECTURES_KEY_PREFIX = 'hiddenLectures';
     let editMode = false;
     let currentIndex = -1;
     let subjects = [];
@@ -363,6 +365,28 @@
 
     function setPageHistory(history) {
       sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    }
+
+    function clearSubjectData(subjectEntry) {
+      if (!subjectEntry) return;
+
+      const subjectName = (subjectEntry.subject || '').trim();
+      const doctorName = (subjectEntry.doctor || '').trim();
+      if (!subjectName || !doctorName) return;
+
+      const localLecturesKey = `${LOCAL_LECTURES_KEY_PREFIX}::${subjectName}::${doctorName}`;
+      const hiddenLecturesKey = `${HIDDEN_LECTURES_KEY_PREFIX}::${subjectName}::${doctorName}`;
+      localStorage.removeItem(localLecturesKey);
+      localStorage.removeItem(hiddenLecturesKey);
+
+      try {
+        const selectedLecture = JSON.parse(sessionStorage.getItem('selectedLecture') || 'null');
+        if (selectedLecture && selectedLecture.subject === subjectName && selectedLecture.doctor === doctorName) {
+          sessionStorage.removeItem('selectedLecture');
+        }
+      } catch {
+        sessionStorage.removeItem('selectedLecture');
+      }
     }
 
     function renderBreadcrumb() {
@@ -435,6 +459,8 @@
     }
 
     function deleteSubject(index) {
+      const deletedSubject = subjects[index];
+      clearSubjectData(deletedSubject);
       subjects.splice(index, 1);
       saveSubjectsToStorage();
       renderSubjects();
