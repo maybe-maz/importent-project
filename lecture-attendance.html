@@ -697,14 +697,55 @@
         student.note
       ]);
 
-      const csv = [headers, ...rows]
-        .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-        .join('\n');
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const headerHtml = headers
+        .map((header) => `<th style="background:#e2e8f0;border:1px solid #cbd5e1;padding:8px;font-weight:700;">${escapeHtml(header)}</th>`)
+        .join('');
+
+      const rowsHtml = rows
+        .map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #cbd5e1;padding:8px;mso-number-format:'\\@';">${escapeHtml(cell)}</td>`).join('')}</tr>`)
+        .join('');
+
+      const tableHtml = `
+        <table>
+          <thead><tr>${headerHtml}</tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      `;
+
+      const worksheet = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office"
+              xmlns:x="urn:schemas-microsoft-com:office:excel"
+              xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <!--[if gte mso 9]>
+            <xml>
+              <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                  <x:ExcelWorksheet>
+                    <x:Name>Attendance</x:Name>
+                    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+                  </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+              </x:ExcelWorkbook>
+            </xml>
+            <![endif]-->
+            <meta charset="UTF-8" />
+          </head>
+          <body>${tableHtml}</body>
+        </html>
+      `;
+
+      const blob = new Blob([worksheet], { type: 'application/vnd.ms-excel;charset=utf-8;' });
       const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
       link.href = URL.createObjectURL(blob);
-      link.download = 'attendance.csv';
+      link.download = `attendance-${date}.xls`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
