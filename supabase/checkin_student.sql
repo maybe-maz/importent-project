@@ -77,7 +77,7 @@ begin
     p_lecture_id,
     p_student_id,
     p_student_name,
-    case when v_status = 'absent' then null else v_now end,
+    v_now,
     v_status,
     v_note
   )
